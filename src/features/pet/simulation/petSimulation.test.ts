@@ -6,6 +6,7 @@ import {
   createLivePetState,
   parseIsoTimestamp,
 } from '../model';
+import { DEFAULT_PET_SIMULATION_CONFIG } from './petSimulationConfig';
 import {
   applyAction,
   applyDecay,
@@ -14,9 +15,11 @@ import {
   deriveAgeStage,
   deriveAlerts,
   deriveAdultOutcome,
+  getNextSimulationWakeDelayMs,
   deriveRecommendedActions,
   deriveStatusInsight,
   deriveMood,
+  tickPet,
 } from './petSimulation';
 
 describe('pet simulation', () => {
@@ -334,6 +337,77 @@ describe('pet simulation', () => {
     expect(next.isSick).toBe(true);
     expect(next.ageStage).toBe('baby');
     expect(next.careMistakes).toBe(4);
+  });
+
+  it('preserves partial-minute elapsed time between ticks', () => {
+    const pet = {
+      ...createLivePetState(0),
+      lastUpdatedAt: '1970-01-01T00:00:00.000Z',
+    };
+
+    const next = catchup(pet, 30_000);
+
+    expect(next.satiety).toBe(pet.satiety);
+    expect(next.energy).toBe(pet.energy);
+    expect(next.lastUpdatedAt).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  it('reports consumed ticks and advances only the consumed decay window', () => {
+    const pet = {
+      ...createLivePetState(0),
+      lastUpdatedAt: '1970-01-01T00:00:00.000Z',
+    };
+
+    const result = tickPet(pet, 70_000);
+
+    expect(result.consumedTicks).toBe(1);
+    expect(result.pet.lastUpdatedAt).toBe('1970-01-01T00:01:00.000Z');
+    expect(result.pet.satiety).toBe(76);
+    expect(result.pet.energy).toBe(65);
+  });
+
+  it('uses custom runtime constants for tick consumption', () => {
+    const pet = {
+      ...createLivePetState(0),
+      lastUpdatedAt: '1970-01-01T00:00:00.000Z',
+    };
+    const config = {
+      ...DEFAULT_PET_SIMULATION_CONFIG,
+      decayStepMs: 10_000,
+      awakeSatietyDecay: 1,
+      awakeEnergyDecay: 1,
+    };
+
+    const result = tickPet(pet, 25_000, config);
+
+    expect(result.consumedTicks).toBe(2);
+    expect(result.pet.lastUpdatedAt).toBe('1970-01-01T00:00:20.000Z');
+    expect(result.pet.satiety).toBe(76);
+    expect(result.pet.energy).toBe(66);
+  });
+
+  it('schedules the next simulation wake for the earliest decay or age transition', () => {
+    const pet = {
+      ...createLivePetState(0),
+      ageStage: 'baby' as const,
+      startedAt: '1970-01-01T00:00:00.000Z',
+      lastUpdatedAt: '1970-01-01T00:59:30.000Z',
+    };
+
+    expect(getNextSimulationWakeDelayMs(pet, 3_590_000)).toBe(10_000);
+  });
+
+  it('does not schedule wakes for egg or dead pets', () => {
+    expect(getNextSimulationWakeDelayMs(createEggPetState(0), 0)).toBeNull();
+    expect(
+      getNextSimulationWakeDelayMs(
+        {
+          ...createLivePetState(0),
+          lifeState: 'dead' as const,
+        },
+        0,
+      ),
+    ).toBeNull();
   });
 
   it('advances life stage during offline catchup', () => {

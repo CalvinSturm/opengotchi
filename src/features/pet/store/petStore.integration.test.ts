@@ -87,4 +87,35 @@ describe('pet store integration', () => {
       saveMessage: null,
     });
   });
+
+  it('persists only when refresh consumes a full decay tick', async () => {
+    vi.setSystemTime(new Date('2026-04-01T00:00:30.000Z'));
+
+    const modelModule = await import('../model');
+    const { usePetStore } = await loadPetStoreModule();
+
+    usePetStore.setState({
+      pet: {
+        ...modelModule.createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
+        lastUpdatedAt: '2026-04-01T00:00:00.000Z',
+      },
+      alerts: [],
+      status: 'ready',
+      draftName: 'Byte',
+      errorMessage: null,
+      saveMessage: null,
+    });
+
+    await usePetStore.getState().refresh();
+
+    expect(usePetStore.getState().pet.lastUpdatedAt).toBe('2026-04-01T00:00:00.000Z');
+    expect(petCommandsMock.savePet).not.toHaveBeenCalled();
+
+    vi.setSystemTime(new Date('2026-04-01T00:01:05.000Z'));
+
+    await usePetStore.getState().refresh();
+
+    expect(usePetStore.getState().pet.lastUpdatedAt).toBe('2026-04-01T00:01:00.000Z');
+    expect(petCommandsMock.savePet).toHaveBeenCalledTimes(1);
+  });
 });

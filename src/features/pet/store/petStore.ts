@@ -4,10 +4,12 @@ import { createDefaultPetState, type PetState } from '../model';
 import {
   applyAction,
   catchup,
-  deriveAlerts,
+  deriveAlertsWithConfig,
+  tickPet,
   type PetAction,
   type PetAlert,
 } from '../simulation/petSimulation';
+import { getPetSimulationConfig } from '../simulation/petSimulationConfig';
 import {
   loadPet as loadPetCommand,
   savePet as savePetCommand,
@@ -23,7 +25,7 @@ type PetStoreState = {
   errorMessage: string | null;
   saveMessage: string | null;
   loadPet: () => Promise<void>;
-  refresh: () => void;
+  refresh: () => Promise<void>;
   setDraftName: (name: string) => void;
   hatchPet: () => Promise<void>;
   applyPetAction: (action: PetAction) => Promise<void>;
@@ -41,9 +43,11 @@ function toErrorMessage(error: unknown): string {
 }
 
 function createPetSnapshot(pet: PetState): Pick<PetStoreState, 'pet' | 'alerts'> {
+  const simulationConfig = getPetSimulationConfig();
+
   return {
     pet,
-    alerts: deriveAlerts(pet),
+    alerts: deriveAlertsWithConfig(pet, simulationConfig),
   };
 }
 
@@ -57,7 +61,12 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
     set({ status: 'loading', errorMessage: null });
 
     try {
-      const pet = catchup(await loadPetCommand(), Date.now());
+      const simulationConfig = getPetSimulationConfig();
+      const { pet, consumedTicks } = tickPet(
+        await loadPetCommand(),
+        Date.now(),
+        simulationConfig,
+      );
 
       set({
         ...createPetSnapshot(pet),
@@ -66,7 +75,9 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
         saveMessage: null,
       });
 
-      await savePetCommand(pet);
+      if (consumedTicks > 0) {
+        await savePetCommand(pet);
+      }
     } catch (error) {
       set({
         status: 'error',
@@ -74,8 +85,28 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
       });
     }
   },
-  refresh() {
-    set((state) => createPetSnapshot(catchup(state.pet, Date.now())));
+  async refresh() {
+    const nowMs = Date.now();
+    const simulationConfig = getPetSimulationConfig();
+    const { pet, consumedTicks } = tickPet(get().pet, nowMs, simulationConfig);
+
+    set({
+      ...createPetSnapshot(pet),
+      draftName: pet.name,
+    });
+
+    if (consumedTicks === 0) {
+      return;
+    }
+
+    try {
+      await savePetCommand(pet);
+    } catch (error) {
+      set({
+        status: 'error',
+        errorMessage: toErrorMessage(error),
+      });
+    }
   },
   setDraftName(name) {
     set({
@@ -124,8 +155,9 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
   },
   async applyPetAction(action) {
     const nowMs = Date.now();
-    const currentPet = catchup(get().pet, nowMs);
-    const nextPet = applyAction(currentPet, action, nowMs);
+    const simulationConfig = getPetSimulationConfig();
+    const currentPet = catchup(get().pet, nowMs, simulationConfig);
+    const nextPet = applyAction(currentPet, action, nowMs, simulationConfig);
 
     set({
       ...createPetSnapshot(nextPet),

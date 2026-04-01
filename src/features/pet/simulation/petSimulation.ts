@@ -8,6 +8,10 @@ import {
   type PetAdultOutcome,
   type PetState,
 } from '../model';
+import {
+  DEFAULT_PET_SIMULATION_CONFIG,
+  type PetSimulationConfig,
+} from './petSimulationConfig';
 
 export type PetAction =
   | 'hatch'
@@ -51,21 +55,11 @@ export type PetStatusInsight = {
   headline: string;
   detail: string;
 };
+export type PetTickResult = {
+  pet: PetState;
+  consumedTicks: number;
+};
 
-const DECAY_STEP_MS = 60_000;
-const LOW_NEED_THRESHOLD = 20;
-const GOOD_NEED_THRESHOLD = 60;
-const GOOD_HEALTH_THRESHOLD = 70;
-const DIRTY_THRESHOLD = 20;
-const CLEANUP_ALERT_THRESHOLD = 70;
-const HIGH_WASTE_THRESHOLD = 80;
-const SICKNESS_THRESHOLD = 90;
-const LOW_HEALTH_THRESHOLD = 35;
-const LOW_WASTE_THRESHOLD = 35;
-const HOUR_MS = 60 * 60 * 1_000;
-const CHILD_STAGE_MS = HOUR_MS;
-const TEEN_STAGE_MS = 6 * HOUR_MS;
-const ADULT_STAGE_MS = 24 * HOUR_MS;
 const ADULT_MILESTONE_TARGETS: Record<PetAdultMilestone, number> = {
   'steady-routine': 6,
   showtime: 4,
@@ -208,14 +202,17 @@ function getAdultMilestoneTarget(milestone: PetAdultMilestone): number {
   return ADULT_MILESTONE_TARGETS[milestone];
 }
 
-function isHealthyRoutineStep(state: PetState): boolean {
+function isHealthyRoutineStep(
+  state: PetState,
+  simulationConfig: PetSimulationConfig,
+): boolean {
   return (
-    state.satiety >= 60 &&
-    state.fun >= 60 &&
-    state.cleanliness >= 60 &&
+    state.satiety >= simulationConfig.goodNeedThreshold &&
+    state.fun >= simulationConfig.goodNeedThreshold &&
+    state.cleanliness >= simulationConfig.goodNeedThreshold &&
     state.energy >= 50 &&
-    state.health >= 75 &&
-    state.waste <= 30 &&
+    state.health >= simulationConfig.goodHealthThreshold + 5 &&
+    state.waste <= simulationConfig.lowWasteThreshold - 5 &&
     !state.isSick
   );
 }
@@ -250,7 +247,11 @@ function getAdultMilestoneActionProgressDelta(
   }
 }
 
-function getAdultMilestoneStepProgressDelta(state: PetState, elapsedSteps: number): number {
+function getAdultMilestoneStepProgressDelta(
+  state: PetState,
+  elapsedSteps: number,
+  simulationConfig: PetSimulationConfig,
+): number {
   if (
     !isAdultAlive(state) ||
     !state.adultOutcome ||
@@ -260,7 +261,7 @@ function getAdultMilestoneStepProgressDelta(state: PetState, elapsedSteps: numbe
     return 0;
   }
 
-  return isHealthyRoutineStep(state) ? elapsedSteps : 0;
+  return isHealthyRoutineStep(state, simulationConfig) ? elapsedSteps : 0;
 }
 
 function applyAdultMilestoneReward(
@@ -387,6 +388,7 @@ function pushRecommendation(
 
 export function deriveRecommendedActions(
   state: PetState,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
 ): PetActionRecommendation[] {
   const recommendations: PetActionRecommendation[] = [];
 
@@ -418,18 +420,21 @@ export function deriveRecommendedActions(
     });
   }
 
-  if (state.waste >= CLEANUP_ALERT_THRESHOLD || state.cleanliness <= DIRTY_THRESHOLD) {
+  if (
+    state.waste >= simulationConfig.cleanupAlertThreshold ||
+    state.cleanliness <= simulationConfig.dirtyThreshold
+  ) {
     pushRecommendation(recommendations, {
       action: 'clean',
       priority: recommendations.length === 0 ? 'primary' : 'secondary',
       reason:
-        state.waste >= CLEANUP_ALERT_THRESHOLD
+        state.waste >= simulationConfig.cleanupAlertThreshold
           ? 'Waste buildup is driving the current risk.'
           : 'Cleanliness is too low and needs attention.',
     });
   }
 
-  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+  if (!state.isSleeping && state.energy <= simulationConfig.lowNeedThreshold) {
     pushRecommendation(recommendations, {
       action: 'sleep',
       priority: recommendations.length === 0 ? 'primary' : 'secondary',
@@ -437,7 +442,7 @@ export function deriveRecommendedActions(
     });
   }
 
-  if (state.satiety <= LOW_NEED_THRESHOLD) {
+  if (state.satiety <= simulationConfig.lowNeedThreshold) {
     pushRecommendation(recommendations, {
       action: 'feed',
       priority: recommendations.length === 0 ? 'primary' : 'secondary',
@@ -501,6 +506,13 @@ export function deriveRecommendedActions(
 }
 
 export function deriveStatusInsight(state: PetState): PetStatusInsight {
+  return deriveStatusInsightWithConfig(state, DEFAULT_PET_SIMULATION_CONFIG);
+}
+
+export function deriveStatusInsightWithConfig(
+  state: PetState,
+  simulationConfig: PetSimulationConfig,
+): PetStatusInsight {
   if (state.lifeState === 'egg') {
     return {
       headline: 'Nursery phase',
@@ -515,20 +527,20 @@ export function deriveStatusInsight(state: PetState): PetStatusInsight {
     };
   }
 
-  const recommendations = deriveRecommendedActions(state);
+  const recommendations = deriveRecommendedActions(state, simulationConfig);
   const primaryRecommendation = recommendations.find(
     (recommendation) => recommendation.priority === 'primary',
   );
 
   if (state.isSick) {
-    if (state.waste >= CLEANUP_ALERT_THRESHOLD) {
+    if (state.waste >= simulationConfig.cleanupAlertThreshold) {
       return {
         headline: 'Condition: sick',
         detail: 'Waste buildup made the pet sick. Heal first, then clean before the condition spirals again.',
       };
     }
 
-    if (state.cleanliness <= DIRTY_THRESHOLD) {
+    if (state.cleanliness <= simulationConfig.dirtyThreshold) {
       return {
         headline: 'Condition: sick',
         detail: 'Poor hygiene pushed the pet into a sick condition. Heal now and clean soon after.',
@@ -541,21 +553,21 @@ export function deriveStatusInsight(state: PetState): PetStatusInsight {
     };
   }
 
-  if (state.waste >= CLEANUP_ALERT_THRESHOLD) {
+  if (state.waste >= simulationConfig.cleanupAlertThreshold) {
     return {
       headline: 'Cleanup is overdue',
       detail: 'Waste is the biggest current risk. Clean now to reduce the chance of sickness.',
     };
   }
 
-  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+  if (!state.isSleeping && state.energy <= simulationConfig.lowNeedThreshold) {
     return {
       headline: 'Energy is critical',
       detail: 'Sleep should come next. Low energy is contributing to the current risk stack.',
     };
   }
 
-  if (state.satiety <= LOW_NEED_THRESHOLD) {
+  if (state.satiety <= simulationConfig.lowNeedThreshold) {
     return {
       headline: 'Satiety is low',
       detail: 'Feed the pet soon before neglect starts converting into bigger condition problems.',
@@ -589,18 +601,22 @@ export function deriveStatusInsight(state: PetState): PetStatusInsight {
   };
 }
 
-export function deriveAgeStage(startedAt: string, nowMs: number): PetAgeStage {
+export function deriveAgeStage(
+  startedAt: string,
+  nowMs: number,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
+): PetAgeStage {
   const elapsedLifetimeMs = Math.max(0, nowMs - parseIsoTimestamp(startedAt));
 
-  if (elapsedLifetimeMs >= ADULT_STAGE_MS) {
+  if (elapsedLifetimeMs >= simulationConfig.adultStageMs) {
     return 'adult';
   }
 
-  if (elapsedLifetimeMs >= TEEN_STAGE_MS) {
+  if (elapsedLifetimeMs >= simulationConfig.teenStageMs) {
     return 'teen';
   }
 
-  if (elapsedLifetimeMs >= CHILD_STAGE_MS) {
+  if (elapsedLifetimeMs >= simulationConfig.childStageMs) {
     return 'child';
   }
 
@@ -633,21 +649,28 @@ export function deriveAdultOutcome(state: Pick<
 }
 
 function countHealthRisks(state: PetState): number {
+  return countHealthRisksWithConfig(state, DEFAULT_PET_SIMULATION_CONFIG);
+}
+
+function countHealthRisksWithConfig(
+  state: PetState,
+  simulationConfig: PetSimulationConfig,
+): number {
   let riskCount = 0;
 
-  if (state.satiety <= LOW_NEED_THRESHOLD) {
+  if (state.satiety <= simulationConfig.lowNeedThreshold) {
     riskCount += 1;
   }
 
-  if (state.cleanliness <= DIRTY_THRESHOLD) {
+  if (state.cleanliness <= simulationConfig.dirtyThreshold) {
     riskCount += 1;
   }
 
-  if (state.waste >= HIGH_WASTE_THRESHOLD) {
+  if (state.waste >= simulationConfig.highWasteThreshold) {
     riskCount += 1;
   }
 
-  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+  if (!state.isSleeping && state.energy <= simulationConfig.lowNeedThreshold) {
     riskCount += 1;
   }
 
@@ -658,16 +681,22 @@ function countHealthRisks(state: PetState): number {
   return riskCount;
 }
 
-function shouldBecomeSick(state: PetState): boolean {
+function shouldBecomeSick(
+  state: PetState,
+  simulationConfig: PetSimulationConfig,
+): boolean {
   return (
     state.isSick ||
-    state.health <= LOW_HEALTH_THRESHOLD ||
+    state.health <= simulationConfig.lowHealthThreshold ||
     state.cleanliness <= 10 ||
-    state.waste >= SICKNESS_THRESHOLD
+    state.waste >= simulationConfig.sicknessThreshold
   );
 }
 
-function applyStatusRules(state: PetState): PetState {
+function applyStatusRules(
+  state: PetState,
+  simulationConfig: PetSimulationConfig,
+): PetState {
   if (isEgg(state)) {
     return {
       ...state,
@@ -688,7 +717,7 @@ function applyStatusRules(state: PetState): PetState {
     : shouldBecomeSick({
         ...state,
         isSick: false,
-      });
+      }, simulationConfig);
 
   return {
     ...state,
@@ -699,19 +728,27 @@ function applyStatusRules(state: PetState): PetState {
   };
 }
 
-function applyHealthRules(state: PetState, elapsedSteps: number): PetState {
+function applyHealthRules(
+  state: PetState,
+  elapsedSteps: number,
+  simulationConfig: PetSimulationConfig,
+): PetState {
   const healthPenalty = applyOutcomeHealthPenaltyModifier(
     state,
-    countHealthRisks(state) * elapsedSteps,
+    countHealthRisksWithConfig(state, simulationConfig) * elapsedSteps,
     elapsedSteps,
   );
   return applyStatusRules({
     ...state,
     health: applyStatDelta(state.health, -healthPenalty),
-  });
+  }, simulationConfig);
 }
 
-function applyCareTracking(state: PetState, elapsedSteps: number): PetState {
+function applyCareTracking(
+  state: PetState,
+  elapsedSteps: number,
+  simulationConfig: PetSimulationConfig,
+): PetState {
   if (state.lifeState === 'dead') {
     return state;
   }
@@ -720,12 +757,12 @@ function applyCareTracking(state: PetState, elapsedSteps: number): PetState {
   let careMistakesDelta = 0;
 
   if (
-    state.satiety >= GOOD_NEED_THRESHOLD &&
-    state.fun >= GOOD_NEED_THRESHOLD &&
-    state.cleanliness >= GOOD_NEED_THRESHOLD &&
-    (state.energy >= GOOD_NEED_THRESHOLD || state.isSleeping) &&
-    state.health >= GOOD_HEALTH_THRESHOLD &&
-    state.waste <= LOW_WASTE_THRESHOLD &&
+    state.satiety >= simulationConfig.goodNeedThreshold &&
+    state.fun >= simulationConfig.goodNeedThreshold &&
+    state.cleanliness >= simulationConfig.goodNeedThreshold &&
+    (state.energy >= simulationConfig.goodNeedThreshold || state.isSleeping) &&
+    state.health >= simulationConfig.goodHealthThreshold &&
+    state.waste <= simulationConfig.lowWasteThreshold &&
     !state.isSick
   ) {
     careScoreDelta += elapsedSteps * 2;
@@ -735,23 +772,23 @@ function applyCareTracking(state: PetState, elapsedSteps: number): PetState {
     careMistakesDelta += elapsedSteps * 2;
   }
 
-  if (state.satiety <= LOW_NEED_THRESHOLD) {
+  if (state.satiety <= simulationConfig.lowNeedThreshold) {
     careMistakesDelta += elapsedSteps;
   }
 
-  if (state.cleanliness <= DIRTY_THRESHOLD) {
+  if (state.cleanliness <= simulationConfig.dirtyThreshold) {
     careMistakesDelta += elapsedSteps;
   }
 
-  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+  if (!state.isSleeping && state.energy <= simulationConfig.lowNeedThreshold) {
     careMistakesDelta += elapsedSteps;
   }
 
-  if (state.waste >= CLEANUP_ALERT_THRESHOLD) {
+  if (state.waste >= simulationConfig.cleanupAlertThreshold) {
     careMistakesDelta += elapsedSteps;
   }
 
-  if (state.health <= LOW_HEALTH_THRESHOLD) {
+  if (state.health <= simulationConfig.lowHealthThreshold) {
     careMistakesDelta += elapsedSteps;
   }
 
@@ -765,6 +802,7 @@ function applyCareTracking(state: PetState, elapsedSteps: number): PetState {
 function withProgression(
   state: PetState,
   nowMs: number,
+  simulationConfig: PetSimulationConfig,
   adjustment?: {
     careScoreDelta?: number;
     careMistakesDelta?: number;
@@ -774,7 +812,7 @@ function withProgression(
     return state;
   }
 
-  const nextAgeStage = deriveAgeStage(state.startedAt, nowMs);
+  const nextAgeStage = deriveAgeStage(state.startedAt, nowMs, simulationConfig);
   const careScore = clampCounter(state.careScore + (adjustment?.careScoreDelta ?? 0));
   const careMistakes = clampCounter(
     state.careMistakes + (adjustment?.careMistakesDelta ?? 0),
@@ -799,6 +837,13 @@ function withProgression(
 }
 
 export function deriveAlerts(state: PetState): PetAlert[] {
+  return deriveAlertsWithConfig(state, DEFAULT_PET_SIMULATION_CONFIG);
+}
+
+export function deriveAlertsWithConfig(
+  state: PetState,
+  simulationConfig: PetSimulationConfig,
+): PetAlert[] {
   const alerts: PetAlert[] = [];
 
   if (state.lifeState === 'egg') {
@@ -816,7 +861,7 @@ export function deriveAlerts(state: PetState): PetAlert[] {
     return alerts;
   }
 
-  if (state.isSick || state.health <= LOW_HEALTH_THRESHOLD) {
+  if (state.isSick || state.health <= simulationConfig.lowHealthThreshold) {
     alerts.push({
       code: 'sick',
       severity: 'critical',
@@ -827,16 +872,16 @@ export function deriveAlerts(state: PetState): PetAlert[] {
     });
   }
 
-  if (state.waste >= CLEANUP_ALERT_THRESHOLD) {
+  if (state.waste >= simulationConfig.cleanupAlertThreshold) {
     alerts.push({
       code: 'needs-cleanup',
-      severity: state.waste >= HIGH_WASTE_THRESHOLD ? 'critical' : 'warning',
+      severity: state.waste >= simulationConfig.highWasteThreshold ? 'critical' : 'warning',
       label: 'Cleanup needed',
       message: 'Waste has built up. Cleaning is overdue.',
     });
   }
 
-  if (state.cleanliness <= DIRTY_THRESHOLD) {
+  if (state.cleanliness <= simulationConfig.dirtyThreshold) {
     alerts.push({
       code: 'dirty',
       severity: 'warning',
@@ -845,7 +890,7 @@ export function deriveAlerts(state: PetState): PetAlert[] {
     });
   }
 
-  if (state.satiety <= LOW_NEED_THRESHOLD) {
+  if (state.satiety <= simulationConfig.lowNeedThreshold) {
     alerts.push({
       code: 'hungry',
       severity: 'warning',
@@ -854,7 +899,7 @@ export function deriveAlerts(state: PetState): PetAlert[] {
     });
   }
 
-  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+  if (!state.isSleeping && state.energy <= simulationConfig.lowNeedThreshold) {
     alerts.push({
       code: 'sleepy',
       severity: 'warning',
@@ -879,12 +924,16 @@ export function buildAlertNotification(
   };
 }
 
-export function applyDecay(state: PetState, elapsedMs: number): PetState {
+export function applyDecay(
+  state: PetState,
+  elapsedMs: number,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
+): PetState {
   if (state.lifeState === 'egg' || state.lifeState === 'dead') {
     return state;
   }
 
-  const elapsedSteps = Math.max(0, Math.floor(elapsedMs / DECAY_STEP_MS));
+  const elapsedSteps = Math.max(0, Math.floor(elapsedMs / simulationConfig.decayStepMs));
 
   if (elapsedSteps === 0) {
     return state;
@@ -895,24 +944,35 @@ export function applyDecay(state: PetState, elapsedMs: number): PetState {
       applyHealthRules(
         {
           ...state,
-          satiety: applyStatDelta(state.satiety, -elapsedSteps),
-          fun: applyStatDelta(state.fun, -elapsedSteps),
-          cleanliness: applyStatDelta(state.cleanliness, -elapsedSteps),
-          energy: applyStatDelta(state.energy, elapsedSteps * 4),
+          satiety: applyStatDelta(state.satiety, -elapsedSteps * simulationConfig.sleepSatietyDecay),
+          fun: applyStatDelta(state.fun, -elapsedSteps * simulationConfig.sleepFunDecay),
+          cleanliness: applyStatDelta(
+            state.cleanliness,
+            -elapsedSteps * simulationConfig.sleepCleanlinessDecay,
+          ),
+          energy: applyStatDelta(
+            state.energy,
+            elapsedSteps * simulationConfig.sleepEnergyRecovery,
+          ),
           waste: applyStatDelta(
             state.waste,
-            applyOutcomeWasteDecayModifier(state, elapsedSteps),
+            applyOutcomeWasteDecayModifier(
+              state,
+              elapsedSteps * simulationConfig.sleepWasteDecay,
+            ),
           ),
         },
         elapsedSteps,
+        simulationConfig,
       ),
       elapsedSteps,
+      simulationConfig,
     );
 
     return withAdultMilestoneProgress(
       nextState,
-      parseIsoTimestamp(state.lastUpdatedAt) + elapsedSteps * DECAY_STEP_MS,
-      getAdultMilestoneStepProgressDelta(nextState, elapsedSteps),
+      parseIsoTimestamp(state.lastUpdatedAt) + elapsedSteps * simulationConfig.decayStepMs,
+      getAdultMilestoneStepProgressDelta(nextState, elapsedSteps, simulationConfig),
     );
   }
 
@@ -920,28 +980,45 @@ export function applyDecay(state: PetState, elapsedMs: number): PetState {
     applyHealthRules(
       {
         ...state,
-        satiety: applyStatDelta(state.satiety, -elapsedSteps * 2),
-        fun: applyStatDelta(state.fun, -elapsedSteps * 2),
-        cleanliness: applyStatDelta(state.cleanliness, -elapsedSteps),
-        energy: applyStatDelta(state.energy, -elapsedSteps * 3),
+        satiety: applyStatDelta(
+          state.satiety,
+          -elapsedSteps * simulationConfig.awakeSatietyDecay,
+        ),
+        fun: applyStatDelta(state.fun, -elapsedSteps * simulationConfig.awakeFunDecay),
+        cleanliness: applyStatDelta(
+          state.cleanliness,
+          -elapsedSteps * simulationConfig.awakeCleanlinessDecay,
+        ),
+        energy: applyStatDelta(
+          state.energy,
+          -elapsedSteps * simulationConfig.awakeEnergyDecay,
+        ),
         waste: applyStatDelta(
           state.waste,
-          applyOutcomeWasteDecayModifier(state, elapsedSteps * 2),
+          applyOutcomeWasteDecayModifier(
+            state,
+            elapsedSteps * simulationConfig.awakeWasteDecay,
+          ),
         ),
       },
       elapsedSteps,
+      simulationConfig,
     ),
     elapsedSteps,
+    simulationConfig,
   );
 
   return withAdultMilestoneProgress(
     nextState,
-    parseIsoTimestamp(state.lastUpdatedAt) + elapsedSteps * DECAY_STEP_MS,
-    getAdultMilestoneStepProgressDelta(nextState, elapsedSteps),
+    parseIsoTimestamp(state.lastUpdatedAt) + elapsedSteps * simulationConfig.decayStepMs,
+    getAdultMilestoneStepProgressDelta(nextState, elapsedSteps, simulationConfig),
   );
 }
 
-export function deriveMood(state: PetState): PetMood {
+export function deriveMood(
+  state: PetState,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
+): PetMood {
   if (state.lifeState === 'egg') {
     return 'egg';
   }
@@ -954,19 +1031,22 @@ export function deriveMood(state: PetState): PetMood {
     return 'sleeping';
   }
 
-  if (state.isSick || state.health <= LOW_HEALTH_THRESHOLD) {
+  if (state.isSick || state.health <= simulationConfig.lowHealthThreshold) {
     return 'sick';
   }
 
-  if (state.satiety <= LOW_NEED_THRESHOLD) {
+  if (state.satiety <= simulationConfig.lowNeedThreshold) {
     return 'hungry';
   }
 
-  if (state.cleanliness <= DIRTY_THRESHOLD || state.waste >= HIGH_WASTE_THRESHOLD) {
+  if (
+    state.cleanliness <= simulationConfig.dirtyThreshold ||
+    state.waste >= simulationConfig.highWasteThreshold
+  ) {
     return 'dirty';
   }
 
-  if (state.energy <= LOW_NEED_THRESHOLD) {
+  if (state.energy <= simulationConfig.lowNeedThreshold) {
     return 'sleepy';
   }
 
@@ -989,8 +1069,9 @@ export function applyAction(
   state: PetState,
   action: PetAction,
   appliedAtMs: number,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
 ): PetState {
-  const normalizedState = applyStatusRules(state);
+  const normalizedState = applyStatusRules(state, simulationConfig);
 
   if (action === 'hatch') {
     return createLivePetState(appliedAtMs, state.name);
@@ -1009,7 +1090,7 @@ export function applyAction(
   }
 
   const finalizeAction = (candidateState: PetState): PetState => {
-    const progressedState = withProgression(candidateState, appliedAtMs);
+    const progressedState = withProgression(candidateState, appliedAtMs, simulationConfig);
     const rewardedState = applyAdultMilestoneReward(
       progressedState,
       action,
@@ -1017,7 +1098,7 @@ export function applyAction(
     );
 
     return withAdultMilestoneProgress(
-      applyStatusRules(rewardedState),
+      applyStatusRules(rewardedState, simulationConfig),
       appliedAtMs,
       getAdultMilestoneActionProgressDelta(normalizedState, progressedState, action),
     );
@@ -1028,16 +1109,24 @@ export function applyAction(
       return finalizeAction(
         applyStatusRules({
           ...normalizedState,
-          satiety: applyStatDelta(normalizedState.satiety, 22),
-          cleanliness: applyStatDelta(normalizedState.cleanliness, -4),
+          satiety: applyStatDelta(normalizedState.satiety, simulationConfig.feedSatietyGain),
+          cleanliness: applyStatDelta(
+            normalizedState.cleanliness,
+            -simulationConfig.feedCleanlinessCost,
+          ),
           waste: applyStatDelta(
             normalizedState.waste,
-            applyOutcomeActionStatModifier(normalizedState, 'feed', 'waste', 8),
+            applyOutcomeActionStatModifier(
+              normalizedState,
+              'feed',
+              'waste',
+              simulationConfig.feedWasteGain,
+            ),
           ),
           isSleeping: false,
           lastUpdatedAt: toIsoTimestamp(appliedAtMs),
           careScore: clampCounter(normalizedState.careScore + 2),
-        }),
+        }, simulationConfig),
       );
     case 'play':
       return finalizeAction(
@@ -1045,19 +1134,32 @@ export function applyAction(
           ...normalizedState,
           fun: applyStatDelta(
             normalizedState.fun,
-            applyOutcomeActionStatModifier(normalizedState, 'play', 'fun', 24),
+            applyOutcomeActionStatModifier(
+              normalizedState,
+              'play',
+              'fun',
+              simulationConfig.playFunGain,
+            ),
           ),
-          satiety: applyStatDelta(normalizedState.satiety, -4),
-          cleanliness: applyStatDelta(normalizedState.cleanliness, -5),
+          satiety: applyStatDelta(normalizedState.satiety, -simulationConfig.playSatietyCost),
+          cleanliness: applyStatDelta(
+            normalizedState.cleanliness,
+            -simulationConfig.playCleanlinessCost,
+          ),
           energy: applyStatDelta(
             normalizedState.energy,
-            applyOutcomeActionStatModifier(normalizedState, 'play', 'energy', -10),
+            applyOutcomeActionStatModifier(
+              normalizedState,
+              'play',
+              'energy',
+              -simulationConfig.playEnergyCost,
+            ),
           ),
-          waste: applyStatDelta(normalizedState.waste, 4),
+          waste: applyStatDelta(normalizedState.waste, simulationConfig.playWasteGain),
           isSleeping: false,
           lastUpdatedAt: toIsoTimestamp(appliedAtMs),
           careScore: clampCounter(normalizedState.careScore + 2),
-        }),
+        }, simulationConfig),
       );
     case 'clean':
       return finalizeAction(
@@ -1065,17 +1167,27 @@ export function applyAction(
           ...normalizedState,
           cleanliness: applyStatDelta(
             normalizedState.cleanliness,
-            applyOutcomeActionStatModifier(normalizedState, 'clean', 'cleanliness', 28),
+            applyOutcomeActionStatModifier(
+              normalizedState,
+              'clean',
+              'cleanliness',
+              simulationConfig.cleanCleanlinessGain,
+            ),
           ),
           waste: applyStatDelta(
             normalizedState.waste,
-            applyOutcomeActionStatModifier(normalizedState, 'clean', 'waste', -36),
+            applyOutcomeActionStatModifier(
+              normalizedState,
+              'clean',
+              'waste',
+              -simulationConfig.cleanWasteReduction,
+            ),
           ),
-          health: applyStatDelta(normalizedState.health, 4),
+          health: applyStatDelta(normalizedState.health, simulationConfig.cleanHealthGain),
           isSleeping: false,
           lastUpdatedAt: toIsoTimestamp(appliedAtMs),
           careScore: clampCounter(normalizedState.careScore + 3),
-        }),
+        }, simulationConfig),
       );
     case 'sleep':
       return finalizeAction(
@@ -1085,9 +1197,9 @@ export function applyAction(
           lastUpdatedAt: toIsoTimestamp(appliedAtMs),
           careScore: clampCounter(
             normalizedState.careScore +
-              (normalizedState.energy <= LOW_NEED_THRESHOLD ? 2 : 1),
+              (normalizedState.energy <= simulationConfig.lowNeedThreshold ? 2 : 1),
           ),
-        }),
+        }, simulationConfig),
       );
     case 'heal':
       return finalizeAction(
@@ -1095,43 +1207,127 @@ export function applyAction(
           ...normalizedState,
           health: applyStatDelta(
             normalizedState.health,
-            applyOutcomeActionStatModifier(normalizedState, 'heal', 'health', 18),
+            applyOutcomeActionStatModifier(
+              normalizedState,
+              'heal',
+              'health',
+              simulationConfig.healHealthGain,
+            ),
           ),
-          fun: applyStatDelta(normalizedState.fun, -4),
+          fun: applyStatDelta(normalizedState.fun, -simulationConfig.healFunCost),
           isSick: false,
           isSleeping: false,
           lastUpdatedAt: toIsoTimestamp(appliedAtMs),
           careScore: clampCounter(
             normalizedState.careScore +
-              (normalizedState.isSick || normalizedState.health <= LOW_HEALTH_THRESHOLD
+              (normalizedState.isSick ||
+              normalizedState.health <= simulationConfig.lowHealthThreshold
                 ? 4
                 : 1),
           ),
-        }),
+        }, simulationConfig),
       );
     default:
       return state;
   }
 }
 
-export function catchup(state: PetState, nowMs: number): PetState {
-  const normalizedState = applyStatusRules(state);
+export function catchup(
+  state: PetState,
+  nowMs: number,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
+): PetState {
+  return tickPet(state, nowMs, simulationConfig).pet;
+}
+
+export function tickPet(
+  state: PetState,
+  nowMs: number,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
+): PetTickResult {
+  const normalizedState = applyStatusRules(state, simulationConfig);
 
   if (normalizedState.lifeState === 'egg' || normalizedState.lifeState === 'dead') {
-    return normalizedState;
+    return {
+      pet: normalizedState,
+      consumedTicks: 0,
+    };
   }
 
   const elapsedMs = nowMs - parseIsoTimestamp(normalizedState.lastUpdatedAt);
 
   if (elapsedMs <= 0) {
-    return withProgression(normalizedState, nowMs);
+    return {
+      pet: withProgression(normalizedState, nowMs, simulationConfig),
+      consumedTicks: 0,
+    };
   }
 
-  return withProgression(
-    {
-      ...applyDecay(normalizedState, elapsedMs),
-      lastUpdatedAt: toIsoTimestamp(nowMs),
-    },
-    nowMs,
+  const consumedTicks = Math.floor(elapsedMs / simulationConfig.decayStepMs);
+
+  if (consumedTicks === 0) {
+    return {
+      pet: withProgression(normalizedState, nowMs, simulationConfig),
+      consumedTicks: 0,
+    };
+  }
+
+  const consumedElapsedMs = consumedTicks * simulationConfig.decayStepMs;
+
+  return {
+    pet: withProgression(
+      {
+        ...applyDecay(normalizedState, consumedElapsedMs, simulationConfig),
+        lastUpdatedAt: toIsoTimestamp(
+          parseIsoTimestamp(normalizedState.lastUpdatedAt) + consumedElapsedMs,
+        ),
+      },
+      nowMs,
+      simulationConfig,
+    ),
+    consumedTicks,
+  };
+}
+
+function getNextAgeStageTransitionAt(
+  state: Pick<PetState, 'startedAt' | 'ageStage'>,
+  simulationConfig: PetSimulationConfig,
+): number | null {
+  const startedAtMs = parseIsoTimestamp(state.startedAt);
+
+  switch (state.ageStage) {
+    case 'baby':
+      return startedAtMs + simulationConfig.childStageMs;
+    case 'child':
+      return startedAtMs + simulationConfig.teenStageMs;
+    case 'teen':
+      return startedAtMs + simulationConfig.adultStageMs;
+    case 'adult':
+      return null;
+    default:
+      return null;
+  }
+}
+
+export function getNextSimulationWakeDelayMs(
+  state: Pick<PetState, 'lifeState' | 'lastUpdatedAt' | 'startedAt' | 'ageStage'>,
+  nowMs: number,
+  simulationConfig: PetSimulationConfig = DEFAULT_PET_SIMULATION_CONFIG,
+): number | null {
+  if (state.lifeState === 'egg' || state.lifeState === 'dead') {
+    return null;
+  }
+
+  const nextDecayAt =
+    parseIsoTimestamp(state.lastUpdatedAt) + simulationConfig.decayStepMs;
+  const nextAgeStageTransitionAt = getNextAgeStageTransitionAt(state, simulationConfig);
+  const candidates = [nextDecayAt, nextAgeStageTransitionAt].filter(
+    (value): value is number => value !== null,
   );
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(...candidates) - nowMs);
 }

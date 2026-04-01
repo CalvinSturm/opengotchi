@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import shellPhoto from '../../../assets/tamagotchi-shell-photo.jpg';
 import type { PetState } from '../model';
-import { deriveStatusInsight } from '../simulation/petSimulation';
+import { deriveStatusInsightWithConfig } from '../simulation/petSimulation';
+import { usePetSimulationConfigStore } from '../simulation/petSimulationConfig';
 import { usePetStore } from '../store/petStore';
 import {
   getDeviceCareBits,
@@ -20,14 +22,14 @@ type PixelTone = 'primary' | 'accent';
 type PixelSprite = Record<string, PixelTone>;
 
 const STATUS_COPY: Record<DeviceMenuActionId, string> = {
-  status: 'Health, hearts, and current care flags.',
+  status: 'Status check.',
   hatch: 'Crack the egg and start raising the pet.',
-  feed: 'Meal icon. Feed to refill hunger.',
-  play: 'Game icon. Play to raise happiness.',
-  heal: 'Medicine icon. Use when the pet is sick.',
-  clean: 'Toilet icon. Clear waste and dirt.',
-  sleep: 'Lights icon. Toggle sleep and rest.',
-  restart: 'Reset to a fresh egg.',
+  feed: 'Meal time.',
+  play: 'Play time.',
+  heal: 'Medicine.',
+  clean: 'Toilet and cleanup.',
+  sleep: 'Lights off.',
+  restart: 'Start a new egg.',
 };
 
 const SPRITES: Record<string, PixelSprite> = {
@@ -219,6 +221,7 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
   const hatchPet = usePetStore((state) => state.hatchPet);
   const pet = usePetStore((state) => state.pet);
   const setDraftName = usePetStore((state) => state.setDraftName);
+  const simulationConfig = usePetSimulationConfigStore((state) => state.config);
 
   const [selectedActionId, setSelectedActionId] = useState<DeviceMenuActionId>('status');
   const [deviceView, setDeviceView] = useState<DeviceView>('pet');
@@ -233,7 +236,7 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
     menuActions.findIndex((action) => action.id === selectedActionId),
   );
   const selectedAction = menuActions[selectedIndex] ?? menuActions[0];
-  const statusInsight = deriveStatusInsight(pet);
+  const statusInsight = deriveStatusInsightWithConfig(pet, simulationConfig);
   const careBits = getDeviceCareBits(pet);
   const attentionCount = careBits.filter((bit) => bit.active).length;
 
@@ -323,57 +326,83 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
       </div>
 
       <div className="device-shell" role="group" aria-label="Tamagotchi device">
-        <div className="device-brand">OpenGotchi</div>
+        <div className="device-photo-frame">
+          <img
+            alt=""
+            aria-hidden="true"
+            className="device-photo"
+            src={shellPhoto}
+          />
 
-        <div className="device-screen-frame">
-          <div className="lcd-header">
-            <span>{pet.name}</span>
-            <span>{pet.lifeState === 'alive' ? pet.ageStage : pet.lifeState}</span>
-          </div>
+          <div className="device-screen-window">
+            <div className="lcd-screen">
+              <div className="lcd-pattern-band lcd-pattern-band-top" aria-hidden="true" />
 
-          <div className="lcd-screen">
-            <div className="lcd-pattern-band lcd-pattern-band-top" aria-hidden="true" />
-
-            {deviceView === 'status' ? (
-              <DeviceStatusView pet={pet} />
-            ) : (
-              <div className="lcd-pet-view">
-                <div className="lcd-callouts" aria-hidden="true">
-                  {careBits
-                    .filter((bit) => bit.active)
-                    .slice(0, 2)
-                    .map((bit) => (
-                      <span key={bit.label}>{bit.label}</span>
-                    ))}
+              {deviceView === 'status' ? (
+                <DeviceStatusView pet={pet} />
+              ) : (
+                <div className="lcd-pet-view">
+                  <div className="lcd-callouts" aria-hidden="true">
+                    {careBits
+                      .filter((bit) => bit.active)
+                      .slice(0, 2)
+                      .map((bit) => (
+                        <span key={bit.label}>{bit.label}</span>
+                      ))}
+                  </div>
+                  <PixelSpriteView sprite={SPRITES[spriteKey]} />
                 </div>
-                <PixelSpriteView sprite={SPRITES[spriteKey]} />
-              </div>
-            )}
+              )}
 
-            <div className="lcd-pattern-band lcd-pattern-band-bottom" aria-hidden="true" />
+              <div className="lcd-pattern-band lcd-pattern-band-bottom" aria-hidden="true" />
+            </div>
+
+            <div className="lcd-overlay-meta">
+              <span>{pet.name}</span>
+              <span>{pet.lifeState === 'alive' ? pet.ageStage : pet.lifeState}</span>
+            </div>
+
+            <div className="lcd-overlay-footer">
+              <span>{lcdMessage}</span>
+              <span>{attentionCount > 0 ? `CALL ${attentionCount}` : 'OK'}</span>
+            </div>
+
+            <div className="lcd-menu-strip" aria-label="Current menu icons">
+              {menuActions.map((action) => (
+                <span
+                  key={action.id}
+                  className={`lcd-menu-item ${selectedAction?.id === action.id ? 'lcd-menu-item-active' : ''}`}
+                >
+                  {action.label}
+                </span>
+              ))}
+            </div>
           </div>
 
-          <div className="lcd-footer">
-            <span>{lcdMessage}</span>
-            <span>{attentionCount > 0 ? `CALL ${attentionCount}` : 'OK'}</span>
-          </div>
-        </div>
-
-        <div className="device-menu" aria-label="Device icon menu">
-          {menuActions.map((action) => (
+          <div className="device-button-hitzones" aria-label="Three hardware buttons">
             <button
-              key={action.id}
-              className={`device-menu-item ${selectedAction?.id === action.id ? 'device-menu-item-active' : ''}`}
+              className="device-button-hitzone device-button-left"
+              disabled={disabled}
+              onClick={handleCycle}
+              type="button"
+              aria-label="A button: cycle menu"
+            />
+            <button
+              className="device-button-hitzone device-button-middle"
               disabled={disabled}
               onClick={() => {
-                setSelectedActionId(action.id);
-                setDeviceView(action.id === 'status' ? 'status' : 'pet');
+                void handleConfirm();
               }}
               type="button"
-            >
-              <span>{action.label}</span>
-            </button>
-          ))}
+              aria-label="B button: confirm"
+            />
+            <button
+              className="device-button-hitzone device-button-right"
+              onClick={handleCancel}
+              type="button"
+              aria-label="C button: cancel"
+            />
+          </div>
         </div>
 
         <p className="device-help">
@@ -402,34 +431,6 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
         ) : (
           <p className="device-note">{statusInsight.detail}</p>
         )}
-
-        <div className="device-buttons" aria-label="Three hardware buttons">
-          <button
-            className="device-button"
-            disabled={disabled}
-            onClick={handleCycle}
-            type="button"
-          >
-            <span>A</span>
-          </button>
-          <button
-            className="device-button device-button-center"
-            disabled={disabled}
-            onClick={() => {
-              void handleConfirm();
-            }}
-            type="button"
-          >
-            <span>B</span>
-          </button>
-          <button
-            className="device-button"
-            onClick={handleCancel}
-            type="button"
-          >
-            <span>C</span>
-          </button>
-        </div>
       </div>
     </section>
   );
