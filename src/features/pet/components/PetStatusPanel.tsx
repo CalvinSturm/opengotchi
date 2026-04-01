@@ -1,22 +1,80 @@
-import type { PetState } from '../model';
-import { deriveMood } from '../simulation/petSimulation';
+import type { PetAdultOutcome, PetState } from '../model';
+import { deriveMood, type PetAlert } from '../simulation/petSimulation';
 
 type PetStatusPanelProps = {
   pet: PetState;
+  alerts: PetAlert[];
   status: 'idle' | 'loading' | 'ready' | 'error';
 };
 
-type PetStatKey = 'satiety' | 'fun' | 'cleanliness' | 'energy';
+type PetStatKey =
+  | 'satiety'
+  | 'fun'
+  | 'cleanliness'
+  | 'energy'
+  | 'health'
+  | 'waste';
 
-const STAT_LABELS: Array<[label: string, valueKey: PetStatKey]> = [
-  ['Satiety', 'satiety'],
-  ['Fun', 'fun'],
-  ['Cleanliness', 'cleanliness'],
-  ['Energy', 'energy'],
+const STAT_LABELS: Array<{
+  label: string;
+  valueKey: PetStatKey;
+  tone?: 'default' | 'danger';
+}> = [
+  { label: 'Satiety', valueKey: 'satiety' },
+  { label: 'Fun', valueKey: 'fun' },
+  { label: 'Cleanliness', valueKey: 'cleanliness' },
+  { label: 'Energy', valueKey: 'energy' },
+  { label: 'Health', valueKey: 'health' },
+  { label: 'Waste', valueKey: 'waste', tone: 'danger' },
 ];
 
-export function PetStatusPanel({ pet, status }: PetStatusPanelProps) {
+const OUTCOME_PRESENTATION: Record<
+  PetAdultOutcome,
+  {
+    badge: string;
+    title: string;
+    description: string;
+    toneClassName: string;
+  }
+> = {
+  balanced: {
+    badge: '◇',
+    title: 'Balanced Adult',
+    description: 'Steady care produced a calm, even-tempered companion.',
+    toneClassName: 'evolution-card-balanced',
+  },
+  playful: {
+    badge: '✦',
+    title: 'Playful Adult',
+    description: 'High spirits and strong care shaped a bright, energetic adult.',
+    toneClassName: 'evolution-card-playful',
+  },
+  messy: {
+    badge: '☄',
+    title: 'Messy Adult',
+    description: 'Neglect around cleanup left a scrappy, chaotic adult personality.',
+    toneClassName: 'evolution-card-messy',
+  },
+  resilient: {
+    badge: '⬢',
+    title: 'Resilient Adult',
+    description: 'Rough patches were overcome, leaving a tougher adult pet.',
+    toneClassName: 'evolution-card-resilient',
+  },
+};
+
+export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
   const mood = deriveMood(pet);
+  const summaryText = alerts[0]?.message ??
+    (pet.isSleeping ? 'Resting quietly.' : 'Ready for the next action.');
+  const outcomeText = pet.adultOutcome
+    ? `Adult outcome: ${pet.adultOutcome}.`
+    : pet.ageStage === 'adult'
+      ? 'Adult outcome pending.'
+      : 'Adult outcome not locked in yet.';
+  const outcomePresentation = pet.adultOutcome
+    ? OUTCOME_PRESENTATION[pet.adultOutcome]
+    : null;
 
   return (
     <section className="panel" aria-live="polite">
@@ -29,20 +87,39 @@ export function PetStatusPanel({ pet, status }: PetStatusPanelProps) {
 
       <div className="pet-card">
         <div className="pet-avatar" aria-hidden="true">
-          {pet.isSleeping ? 'Zz' : '◕◡◕'}
+          {pet.isSleeping ? 'Zz' : pet.isSick ? '×﹏×' : '◕◡◕'}
         </div>
 
         <div className="pet-summary">
           <h3>{pet.name}</h3>
           <p>
+            Stage: <strong>{pet.ageStage}</strong>
+          </p>
+          <p>
             Mood: <strong>{mood}</strong>
           </p>
-          <p>{pet.isSleeping ? 'Resting quietly.' : 'Ready for the next action.'}</p>
+          <p>{summaryText}</p>
+          <p>{outcomeText}</p>
+          <div className="pet-flags">
+            <span className="pet-flag">{pet.ageStage}</span>
+            <span className="pet-flag">
+              Care {pet.careScore} / Mistakes {pet.careMistakes}
+            </span>
+            <span className={`pet-flag ${pet.isSick ? 'pet-flag-danger' : ''}`}>
+              {pet.isSick ? 'Sick' : 'Stable'}
+            </span>
+            <span className={`pet-flag ${pet.waste >= 70 ? 'pet-flag-danger' : ''}`}>
+              Waste {pet.waste >= 70 ? 'High' : 'Okay'}
+            </span>
+            {pet.adultOutcome ? (
+              <span className="pet-flag">{pet.adultOutcome}</span>
+            ) : null}
+          </div>
         </div>
       </div>
 
       <div className="stat-list">
-        {STAT_LABELS.map(([label, valueKey]) => {
+        {STAT_LABELS.map(({ label, valueKey, tone = 'default' }) => {
           const value = pet[valueKey];
 
           return (
@@ -53,13 +130,44 @@ export function PetStatusPanel({ pet, status }: PetStatusPanelProps) {
               </div>
               <div className="stat-track">
                 <div
-                  className="stat-fill"
+                  className={`stat-fill ${tone === 'danger' ? 'stat-fill-danger' : ''}`}
                   style={{ width: `${value}%` }}
                 />
               </div>
             </div>
           );
         })}
+      </div>
+
+      {outcomePresentation ? (
+        <section
+          className={`evolution-card ${outcomePresentation.toneClassName}`}
+          aria-label="Adult evolution outcome"
+        >
+          <div className="evolution-badge" aria-hidden="true">
+            {outcomePresentation.badge}
+          </div>
+          <div className="evolution-copy">
+            <p className="evolution-kicker">Evolution Outcome</p>
+            <h4>{outcomePresentation.title}</h4>
+            <p>{outcomePresentation.description}</p>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="alert-list">
+        {alerts.length === 0 ? (
+          <p className="alert-empty">No attention alerts.</p>
+        ) : (
+          alerts.map((alert) => (
+            <p
+              key={alert.code}
+              className={`attention-alert attention-alert-${alert.severity}`}
+            >
+              <strong>{alert.label}:</strong> {alert.message}
+            </p>
+          ))
+        )}
       </div>
     </section>
   );

@@ -14,11 +14,27 @@ Implemented now:
 
 - Pet status UI
 - Feed, play, clean, and sleep actions
+- Frontend listeners for tray and save-status events
+- Minimal settings/system UI
 - Pure simulation functions in `src/features/pet/simulation`
 - Tauri command roundtrip for:
   - `load_pet`
   - `save_pet`
 - Pet persistence in Rust
+- Settings persistence in Rust
+- Window/system commands for:
+  - show/hide main window
+  - always-on-top toggle
+  - reveal save folder
+  - quit app
+- Desktop notification command
+- Tray event emission for:
+  - `tray://open-main-window`
+  - `tray://feed-shortcut`
+  - `tray://play-shortcut`
+- Save status event emission for:
+  - `pet://save-completed`
+  - `pet://save-failed`
 - Versioned pet DTO with offline catch-up
 - Legacy read compatibility for the previous `pet-save.json` envelope format
 
@@ -31,10 +47,7 @@ Scaffolded but still minimal:
 
 Not implemented yet:
 
-- Settings persistence
-- Tray shortcuts/events
-- Desktop notifications
-- Expanded window control commands
+- Tray-driven frontend polish beyond the current listeners
 
 ## Stack
 

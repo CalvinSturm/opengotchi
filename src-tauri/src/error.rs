@@ -6,6 +6,8 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("notification error: {0}")]
+    Notification(#[from] tauri_plugin_notification::Error),
     #[error("time format error: {0}")]
     TimeFormat(#[from] time::error::Format),
     #[error("time parse error: {0}")]

@@ -3,7 +3,7 @@
 ## Scope
 
 - This document defines the MVP IPC boundary.
-- Today, the bootstrap already uses `invoke()` for pet persistence.
+- Today, the bootstrap already uses `invoke()` for pet and settings persistence.
 - Commands and events listed here that are not yet in code are planned interfaces, not implemented facts.
 
 ## Tauri IPC Model

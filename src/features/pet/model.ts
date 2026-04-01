@@ -3,7 +3,15 @@ import { z } from 'zod';
 export const PET_SAVE_VERSION = 1 as const;
 
 const petStatSchema = z.number().int().min(0).max(100);
+const careCounterSchema = z.number().int().min(0);
 const isoTimestampSchema = z.string().datetime({ offset: true });
+const petAgeStageSchema = z.enum(['baby', 'child', 'teen', 'adult']);
+const petAdultOutcomeSchema = z.enum([
+  'balanced',
+  'playful',
+  'messy',
+  'resilient',
+]);
 
 export const petStateDtoSchema = z.object({
   version: z.literal(PET_SAVE_VERSION),
@@ -12,12 +20,22 @@ export const petStateDtoSchema = z.object({
   fun: petStatSchema,
   cleanliness: petStatSchema,
   energy: petStatSchema,
+  health: petStatSchema,
+  waste: petStatSchema,
+  isSick: z.boolean(),
   isSleeping: z.boolean(),
+  startedAt: isoTimestampSchema,
   lastUpdatedAt: isoTimestampSchema,
+  ageStage: petAgeStageSchema,
+  careScore: careCounterSchema,
+  careMistakes: careCounterSchema,
+  adultOutcome: petAdultOutcomeSchema.nullable(),
 });
 
 export type PetStateDTO = z.infer<typeof petStateDtoSchema>;
 export type PetState = PetStateDTO;
+export type PetAgeStage = z.infer<typeof petAgeStageSchema>;
+export type PetAdultOutcome = z.infer<typeof petAdultOutcomeSchema>;
 
 export function toIsoTimestamp(value: number | Date = Date.now()): string {
   if (typeof value === 'number') {
@@ -47,7 +65,15 @@ export function createDefaultPetState(
     fun: 72,
     cleanliness: 80,
     energy: 68,
+    health: 84,
+    waste: 12,
+    isSick: false,
     isSleeping: false,
+    startedAt: toIsoTimestamp(now),
     lastUpdatedAt: toIsoTimestamp(now),
+    ageStage: 'baby',
+    careScore: 0,
+    careMistakes: 0,
+    adultOutcome: null,
   };
 }

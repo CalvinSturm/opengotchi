@@ -8,6 +8,7 @@ const ACTIONS = [
   { label: 'Feed', action: 'feed' as const },
   { label: 'Play', action: 'play' as const },
   { label: 'Clean', action: 'clean' as const },
+  { label: 'Heal', action: 'heal' as const },
   { label: 'Sleep', action: 'sleep' as const },
 ];
 
