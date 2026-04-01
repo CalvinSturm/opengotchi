@@ -2,7 +2,9 @@ import { invoke } from '@tauri-apps/api/core';
 
 import {
   type PetNotificationDTO,
+  type PetReminderSyncDTO,
   petNotificationDtoSchema,
+  petReminderSyncDtoSchema,
 } from '../../features/system/notificationModel';
 
 function hasTauriRuntime(): boolean {
@@ -49,6 +51,18 @@ export async function sendPetNotification(
   }
 
   await invoke<void>('send_pet_notification', {
+    payload: parsedPayload,
+  });
+}
+
+export async function syncPetReminder(payload: PetReminderSyncDTO): Promise<void> {
+  const parsedPayload = petReminderSyncDtoSchema.parse(payload);
+
+  if (!hasTauriRuntime()) {
+    return;
+  }
+
+  await invoke<void>('sync_pet_reminder', {
     payload: parsedPayload,
   });
 }

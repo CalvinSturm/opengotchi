@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 
-use crate::models::notification::PetNotificationDto;
+use crate::models::notification::{PetNotificationDto, PetReminderSyncDto};
 use crate::services::{notifications, window};
 
 #[tauri::command]
@@ -21,6 +21,11 @@ pub fn set_always_on_top(app: AppHandle, enabled: bool) -> Result<(), String> {
 #[tauri::command]
 pub fn send_pet_notification(app: AppHandle, payload: PetNotificationDto) -> Result<(), String> {
     notifications::send_pet_notification(&app, payload).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn sync_pet_reminder(app: AppHandle, payload: PetReminderSyncDto) -> Result<(), String> {
+    notifications::sync_pet_reminder(&app, payload).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

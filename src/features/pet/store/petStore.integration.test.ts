@@ -1,0 +1,90 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const petCommandsMock = vi.hoisted(() => ({
+  loadPet: vi.fn(),
+  savePet: vi.fn(),
+}));
+
+vi.mock('../../../lib/tauri/petCommands', () => petCommandsMock);
+
+async function loadPetStoreModule() {
+  const petStoreModule = await import('./petStore');
+
+  petStoreModule.usePetStore.setState(
+    petStoreModule.usePetStore.getInitialState(),
+    true,
+  );
+
+  return petStoreModule;
+}
+
+describe('pet store integration', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('loads, catches up, and persists the pet snapshot', async () => {
+    vi.setSystemTime(new Date('2026-04-02T00:00:00.000Z'));
+
+    const modelModule = await import('../model');
+
+    petCommandsMock.loadPet.mockResolvedValue({
+      ...modelModule.createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
+      name: 'Nova',
+      lastUpdatedAt: '2026-04-01T23:58:00.000Z',
+    });
+
+    const { usePetStore } = await loadPetStoreModule();
+
+    await usePetStore.getState().loadPet();
+
+    const state = usePetStore.getState();
+
+    expect(petCommandsMock.loadPet).toHaveBeenCalledTimes(1);
+    expect(petCommandsMock.savePet).toHaveBeenCalledTimes(1);
+    expect(state.status).toBe('ready');
+    expect(state.draftName).toBe('Nova');
+    expect(state.pet.name).toBe('Nova');
+    expect(state.pet.lastUpdatedAt).toBe('2026-04-02T00:00:00.000Z');
+    expect(state.pet.lifeState).toBe('alive');
+  });
+
+  it('hatches the egg using the draft name and persists the new live pet', async () => {
+    vi.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
+
+    const { usePetStore } = await loadPetStoreModule();
+
+    usePetStore.getState().setDraftName('Mochi');
+    await usePetStore.getState().hatchPet();
+
+    const state = usePetStore.getState();
+
+    expect(state.pet.lifeState).toBe('alive');
+    expect(state.pet.name).toBe('Mochi');
+    expect(state.draftName).toBe('Mochi');
+    expect(petCommandsMock.savePet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lifeState: 'alive',
+        name: 'Mochi',
+      }),
+    );
+  });
+
+  it('records save failure events in store state', async () => {
+    const { usePetStore } = await loadPetStoreModule();
+
+    usePetStore.getState().markSaveFailed('disk unavailable');
+
+    expect(usePetStore.getState()).toMatchObject({
+      status: 'error',
+      errorMessage: 'disk unavailable',
+      saveMessage: null,
+    });
+  });
+});

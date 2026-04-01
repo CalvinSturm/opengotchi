@@ -65,6 +65,17 @@ export type PetNotificationDTO = {
   body: string;
 };
 
+export type PetReminderDTO = {
+  key: string;
+  title: string;
+  body: string;
+};
+
+export type PetReminderSyncDTO = {
+  notificationsEnabled: boolean;
+  reminder: PetReminderDTO | null;
+};
+
 export type SaveCompletedEvent = {
   savedAt: string;
 };
@@ -93,6 +104,9 @@ export type SaveFailedEvent = {
   - updates the main window always-on-top state
 - `send_pet_notification(payload: PetNotificationDTO): Promise<void>`
   - sends a desktop notification
+- `sync_pet_reminder(payload: PetReminderSyncDTO): Promise<void>`
+  - syncs the current highest-priority reminder candidate to the desktop layer
+  - Rust owns cooldown, repeat timing, and immediate delivery when the reminder changes
 - `reveal_save_folder(): Promise<void>`
   - opens the app save directory in the host OS
 - `quit_app(): Promise<void>`

@@ -1,14 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 import { PetControls } from '../features/pet/components/PetControls';
 import { PetNurseryPanel } from '../features/pet/components/PetNurseryPanel';
 import { PetStatusPanel } from '../features/pet/components/PetStatusPanel';
 import { useSettingsStore } from '../features/settings/store/settingsStore';
 import { SystemPanel } from '../features/system/components/SystemPanel';
+import { buildPetReminderSyncPayload } from '../features/system/reminderSync';
 import { subscribeToDesktopEvents } from '../features/system/tauriEvents';
 import { usePetStore } from '../features/pet/store/petStore';
-import { buildAlertNotification } from '../features/pet/simulation/petSimulation';
-import { sendPetNotification, showMainWindow } from '../lib/tauri/appCommands';
+import { showMainWindow, syncPetReminder } from '../lib/tauri/appCommands';
 
 export function App() {
   const alerts = usePetStore((state) => state.alerts);
@@ -26,8 +26,9 @@ export function App() {
   const saveMessage = usePetStore((state) => state.saveMessage);
   const status = usePetStore((state) => state.status);
   const applyPetAction = usePetStore((state) => state.applyPetAction);
-  const previousAlertCodeRef = useRef<string | null>(null);
   const primaryAlert = alerts[0] ?? null;
+  const primaryAlertCode = primaryAlert?.code ?? null;
+  const primaryAlertMessage = primaryAlert?.message ?? null;
 
   useEffect(() => {
     void loadPet();
@@ -87,21 +88,14 @@ export function App() {
   }, [clearSaveMessage, saveMessage]);
 
   useEffect(() => {
-    if (!notificationsEnabled || !primaryAlert) {
-      previousAlertCodeRef.current = null;
-      return;
-    }
-
-    if (previousAlertCodeRef.current === primaryAlert.code) {
-      return;
-    }
-
-    previousAlertCodeRef.current = primaryAlert.code;
-
-    const notification = buildAlertNotification(pet.name, primaryAlert);
-
-    void sendPetNotification(notification).catch(() => {});
-  }, [notificationsEnabled, pet.name, primaryAlert]);
+    void syncPetReminder(
+      buildPetReminderSyncPayload({
+        notificationsEnabled,
+        petName: pet.name,
+        primaryAlert,
+      }),
+    ).catch(() => {});
+  }, [notificationsEnabled, pet.name, primaryAlertCode, primaryAlertMessage]);
 
   return (
     <main className="shell">

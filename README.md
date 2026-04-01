@@ -20,6 +20,8 @@ Implemented now:
 - Minimal settings/system UI
 - Pure simulation functions in `src/features/pet/simulation`
 - Adult milestones with outcome-based progress and rewards
+- Desktop-owned reminder cooldown and repeat scheduling
+- Integration tests for stores, reminder sync, and desktop event wiring
 - Tauri command roundtrip for:
   - `load_pet`
   - `save_pet`
@@ -47,11 +49,6 @@ Scaffolded but still minimal:
 - Notification service
 - Window service
 - Architecture and IPC docs
-
-Not implemented yet:
-
-- Desktop-owned reminder scheduling beyond the current foreground listeners
-- Zustand/Tauri integration tests beyond the pure simulation layer
 
 ## Stack
 
@@ -131,9 +128,9 @@ export type PetStateDTO = {
 
 Current implementation priorities:
 
-1. Move reminder policy into the desktop layer while keeping simulation rules in TypeScript.
-2. Add Zustand/Tauri integration tests around load, save, tray shortcuts, and save-status events.
-3. Expand post-adult content beyond a single milestone per adult outcome.
+1. Expand post-adult content beyond a single milestone per adult outcome.
+2. Decide whether reminder policy needs persisted cooldown state across full app restarts.
+3. Add higher-level app rendering tests once a browser-capable test setup is in place.
 
 ## Project Layout
 

@@ -19,6 +19,7 @@ pub fn run() {
             commands::app::hide_main_window,
             commands::app::set_always_on_top,
             commands::app::send_pet_notification,
+            commands::app::sync_pet_reminder,
             commands::app::reveal_save_folder,
             commands::app::quit_app,
             commands::pet::load_pet,
