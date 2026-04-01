@@ -19,10 +19,13 @@ type PetStoreState = {
   status: PetStoreStatus;
   pet: PetState;
   alerts: PetAlert[];
+  draftName: string;
   errorMessage: string | null;
   saveMessage: string | null;
   loadPet: () => Promise<void>;
   refresh: () => void;
+  setDraftName: (name: string) => void;
+  hatchPet: () => Promise<void>;
   applyPetAction: (action: PetAction) => Promise<void>;
   markSaveCompleted: (savedAt: string) => void;
   markSaveFailed: (message: string) => void;
@@ -47,6 +50,7 @@ function createPetSnapshot(pet: PetState): Pick<PetStoreState, 'pet' | 'alerts'>
 export const usePetStore = create<PetStoreState>((set, get) => ({
   status: 'idle',
   ...createPetSnapshot(createDefaultPetState()),
+  draftName: createDefaultPetState().name,
   errorMessage: null,
   saveMessage: null,
   async loadPet() {
@@ -57,6 +61,7 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
 
       set({
         ...createPetSnapshot(pet),
+        draftName: pet.name,
         status: 'ready',
         saveMessage: null,
       });
@@ -72,6 +77,51 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
   refresh() {
     set((state) => createPetSnapshot(catchup(state.pet, Date.now())));
   },
+  setDraftName(name) {
+    set({
+      draftName: name,
+      errorMessage: null,
+    });
+  },
+  async hatchPet() {
+    const nowMs = Date.now();
+    const currentPet = get().pet;
+    const nextName = get().draftName.trim();
+
+    if (!nextName) {
+      set({
+        status: 'error',
+        errorMessage: 'Choose a pet name before hatching.',
+      });
+      return;
+    }
+
+    const nextPet = applyAction(
+      {
+        ...currentPet,
+        name: nextName,
+      },
+      'hatch',
+      nowMs,
+    );
+
+    set({
+      ...createPetSnapshot(nextPet),
+      draftName: nextName,
+      status: 'ready',
+      errorMessage: null,
+      saveMessage: null,
+    });
+
+    try {
+      await savePetCommand(nextPet);
+    } catch (error) {
+      set({
+        status: 'error',
+        errorMessage: toErrorMessage(error),
+      });
+    }
+  },
   async applyPetAction(action) {
     const nowMs = Date.now();
     const currentPet = catchup(get().pet, nowMs);
@@ -79,6 +129,7 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
 
     set({
       ...createPetSnapshot(nextPet),
+      draftName: nextPet.name,
       status: 'ready',
       errorMessage: null,
       saveMessage: null,

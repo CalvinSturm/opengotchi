@@ -13,10 +13,13 @@ Minimal Tauri 2 desktop pet bootstrap with:
 Implemented now:
 
 - Pet status UI
-- Feed, play, clean, and sleep actions
+- Egg to alive to dead pet lifecycle
+- Hatch flow with pre-run naming
+- Feed, play, clean, heal, sleep, and restart actions
 - Frontend listeners for tray and save-status events
 - Minimal settings/system UI
 - Pure simulation functions in `src/features/pet/simulation`
+- Adult milestones with outcome-based progress and rewards
 - Tauri command roundtrip for:
   - `load_pet`
   - `save_pet`
@@ -47,7 +50,8 @@ Scaffolded but still minimal:
 
 Not implemented yet:
 
-- Tray-driven frontend polish beyond the current listeners
+- Desktop-owned reminder scheduling beyond the current foreground listeners
+- Zustand/Tauri integration tests beyond the pure simulation layer
 
 ## Stack
 
@@ -94,14 +98,42 @@ export type PetStateDTO = {
   fun: number;
   cleanliness: number;
   energy: number;
+  health: number;
+  waste: number;
+  lifeState: 'egg' | 'alive' | 'dead';
+  isSick: boolean;
   isSleeping: boolean;
+  startedAt: string;
   lastUpdatedAt: string;
+  ageStage: 'baby' | 'child' | 'teen' | 'adult';
+  careScore: number;
+  careMistakes: number;
+  adultOutcome: 'balanced' | 'playful' | 'messy' | 'resilient' | null;
+  adultMilestone:
+    | 'steady-routine'
+    | 'showtime'
+    | 'spring-clean'
+    | 'recovery-run'
+    | null;
+  adultMilestoneProgress: number;
+  adultMilestoneCompletedAt: string | null;
 };
 ```
 
+- `lifeState` gates nursery, active run, and game-over flow
 - `lastUpdatedAt` is an ISO timestamp
+- `startedAt` anchors age progression
+- no-save startup begins at `lifeState: 'egg'`
 - stat values are clamped to `0..100`
 - load path applies offline catch-up in TypeScript before the state becomes active
+
+## Next Steps
+
+Current implementation priorities:
+
+1. Move reminder policy into the desktop layer while keeping simulation rules in TypeScript.
+2. Add Zustand/Tauri integration tests around load, save, tray shortcuts, and save-status events.
+3. Expand post-adult content beyond a single milestone per adult outcome.
 
 ## Project Layout
 

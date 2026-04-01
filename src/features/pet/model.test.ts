@@ -13,6 +13,7 @@ describe('pet dto mapping', () => {
       energy: 68,
       health: 84,
       waste: 12,
+      lifeState: 'alive',
       isSick: false,
       isSleeping: false,
       startedAt: '2026-04-01T12:00:00.000Z',
@@ -21,10 +22,14 @@ describe('pet dto mapping', () => {
       careScore: 14,
       careMistakes: 2,
       adultOutcome: null,
+      adultMilestone: 'steady-routine',
+      adultMilestoneProgress: 4,
+      adultMilestoneCompletedAt: '2026-04-02T17:00:00.000Z',
     });
 
     expect(dto.health).toBe(84);
     expect(dto.waste).toBe(12);
+    expect(dto.lifeState).toBe('alive');
     expect(dto.isSick).toBe(false);
     expect(dto.isSleeping).toBe(false);
     expect(dto.startedAt).toBe('2026-04-01T12:00:00.000Z');
@@ -33,5 +38,8 @@ describe('pet dto mapping', () => {
     expect(dto.careScore).toBe(14);
     expect(dto.careMistakes).toBe(2);
     expect(dto.adultOutcome).toBeNull();
+    expect(dto.adultMilestone).toBe('steady-routine');
+    expect(dto.adultMilestoneProgress).toBe(4);
+    expect(dto.adultMilestoneCompletedAt).toBe('2026-04-02T17:00:00.000Z');
   });
 });

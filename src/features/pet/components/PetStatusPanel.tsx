@@ -1,5 +1,9 @@
 import type { PetAdultOutcome, PetState } from '../model';
-import { deriveMood, type PetAlert } from '../simulation/petSimulation';
+import {
+  deriveMood,
+  getAdultMilestonePresentation,
+  type PetAlert,
+} from '../simulation/petSimulation';
 
 type PetStatusPanelProps = {
   pet: PetState;
@@ -65,16 +69,25 @@ const OUTCOME_PRESENTATION: Record<
 
 export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
   const mood = deriveMood(pet);
-  const summaryText = alerts[0]?.message ??
-    (pet.isSleeping ? 'Resting quietly.' : 'Ready for the next action.');
-  const outcomeText = pet.adultOutcome
-    ? `Adult outcome: ${pet.adultOutcome}.`
-    : pet.ageStage === 'adult'
-      ? 'Adult outcome pending.'
-      : 'Adult outcome not locked in yet.';
+  const summaryText = pet.lifeState === 'egg'
+    ? 'Waiting to hatch.'
+    : pet.lifeState === 'dead'
+      ? 'This pet has passed on. Restart to begin a new run.'
+      : alerts[0]?.message ??
+      (pet.isSleeping ? 'Resting quietly.' : 'Ready for the next action.');
+  const outcomeText = pet.lifeState === 'egg'
+    ? 'Adult outcome will unlock later in the run.'
+    : pet.lifeState === 'dead'
+      ? 'Run ended.'
+      : pet.adultOutcome
+        ? `Adult outcome: ${pet.adultOutcome}.`
+        : pet.ageStage === 'adult'
+          ? 'Adult outcome pending.'
+          : 'Adult outcome not locked in yet.';
   const outcomePresentation = pet.adultOutcome
     ? OUTCOME_PRESENTATION[pet.adultOutcome]
     : null;
+  const milestonePresentation = getAdultMilestonePresentation(pet);
 
   return (
     <section className="panel" aria-live="polite">
@@ -87,7 +100,15 @@ export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
 
       <div className="pet-card">
         <div className="pet-avatar" aria-hidden="true">
-          {pet.isSleeping ? 'Zz' : pet.isSick ? '×﹏×' : '◕◡◕'}
+          {pet.lifeState === 'dead'
+            ? 'x_x'
+            : pet.lifeState === 'egg'
+              ? 'o_o'
+            : pet.isSleeping
+              ? 'Zz'
+              : pet.isSick
+                ? '×﹏×'
+                : '◕◡◕'}
         </div>
 
         <div className="pet-summary">
@@ -102,6 +123,11 @@ export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
           <p>{outcomeText}</p>
           <div className="pet-flags">
             <span className="pet-flag">{pet.ageStage}</span>
+            <span
+              className={`pet-flag ${pet.lifeState === 'dead' ? 'pet-flag-danger' : ''}`}
+            >
+              {pet.lifeState}
+            </span>
             <span className="pet-flag">
               Care {pet.careScore} / Mistakes {pet.careMistakes}
             </span>
@@ -152,6 +178,26 @@ export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
             <h4>{outcomePresentation.title}</h4>
             <p>{outcomePresentation.description}</p>
           </div>
+        </section>
+      ) : null}
+
+      {milestonePresentation ? (
+        <section className="milestone-card" aria-label="Adult milestone progress">
+          <div className="milestone-header">
+            <div>
+              <p className="evolution-kicker">Adult Milestone</p>
+              <h4>{milestonePresentation.title}</h4>
+            </div>
+            <span className="pet-flag">
+              {milestonePresentation.completed
+                ? 'Completed'
+                : `${milestonePresentation.progress}/${milestonePresentation.target}`}
+            </span>
+          </div>
+          <p>{milestonePresentation.description}</p>
+          <p className="milestone-reward">
+            Reward: {milestonePresentation.reward}
+          </p>
         </section>
       ) : null}
 

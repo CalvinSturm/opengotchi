@@ -10,6 +10,14 @@ fn default_waste() -> u8 {
     12
 }
 
+fn default_life_state() -> PetLifeState {
+    PetLifeState::Alive
+}
+
+fn default_adult_milestone_progress() -> u32 {
+    0
+}
+
 fn default_is_sick() -> bool {
     false
 }
@@ -36,6 +44,24 @@ pub enum PetAgeStage {
     Adult,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PetLifeState {
+    Egg,
+    #[default]
+    Alive,
+    Dead,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PetAdultMilestone {
+    SteadyRoutine,
+    Showtime,
+    SpringClean,
+    RecoveryRun,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PetAdultOutcome {
@@ -58,6 +84,8 @@ pub struct PetStateDto {
     pub health: u8,
     #[serde(default = "default_waste")]
     pub waste: u8,
+    #[serde(default = "default_life_state")]
+    pub life_state: PetLifeState,
     #[serde(default = "default_is_sick")]
     pub is_sick: bool,
     pub is_sleeping: bool,
@@ -72,6 +100,12 @@ pub struct PetStateDto {
     pub care_mistakes: u32,
     #[serde(default)]
     pub adult_outcome: Option<PetAdultOutcome>,
+    #[serde(default)]
+    pub adult_milestone: Option<PetAdultMilestone>,
+    #[serde(default = "default_adult_milestone_progress")]
+    pub adult_milestone_progress: u32,
+    #[serde(default)]
+    pub adult_milestone_completed_at: Option<String>,
 }
 
 impl PetStateDto {
@@ -85,6 +119,7 @@ impl PetStateDto {
             energy: 68,
             health: default_health(),
             waste: default_waste(),
+            life_state: PetLifeState::Egg,
             is_sick: default_is_sick(),
             is_sleeping: false,
             started_at: last_updated_at.clone(),
@@ -93,6 +128,9 @@ impl PetStateDto {
             care_score: default_care_score(),
             care_mistakes: default_care_mistakes(),
             adult_outcome: None,
+            adult_milestone: None,
+            adult_milestone_progress: default_adult_milestone_progress(),
+            adult_milestone_completed_at: None,
         }
     }
 
@@ -143,6 +181,7 @@ mod tests {
             energy: 68,
             health: 84,
             waste: 12,
+            life_state: PetLifeState::Alive,
             is_sick: false,
             is_sleeping: false,
             started_at: "2026-04-01T12:00:00.000Z".to_string(),
@@ -151,12 +190,16 @@ mod tests {
             care_score: 14,
             care_mistakes: 2,
             adult_outcome: None,
+            adult_milestone: Some(PetAdultMilestone::SteadyRoutine),
+            adult_milestone_progress: 4,
+            adult_milestone_completed_at: Some("2026-04-02T17:00:00.000Z".to_string()),
         };
 
         let value = serde_json::to_value(dto).expect("dto should serialize");
 
         assert_eq!(value["health"], 84);
         assert_eq!(value["waste"], 12);
+        assert_eq!(value["lifeState"], "alive");
         assert_eq!(value["isSick"], false);
         assert_eq!(value["isSleeping"], false);
         assert_eq!(value["startedAt"], "2026-04-01T12:00:00.000Z");
@@ -165,6 +208,9 @@ mod tests {
         assert_eq!(value["careScore"], 14);
         assert_eq!(value["careMistakes"], 2);
         assert!(value["adultOutcome"].is_null());
+        assert_eq!(value["adultMilestone"], "steady-routine");
+        assert_eq!(value["adultMilestoneProgress"], 4);
+        assert_eq!(value["adultMilestoneCompletedAt"], "2026-04-02T17:00:00.000Z");
         assert_eq!(value["version"], 1);
     }
 
@@ -185,11 +231,15 @@ mod tests {
 
         assert_eq!(dto.health, 84);
         assert_eq!(dto.waste, 12);
+        assert_eq!(dto.life_state, PetLifeState::Alive);
         assert!(!dto.is_sick);
         assert_eq!(dto.started_at, "");
         assert_eq!(dto.age_stage, PetAgeStage::Baby);
         assert_eq!(dto.care_score, 0);
         assert_eq!(dto.care_mistakes, 0);
         assert_eq!(dto.adult_outcome, None);
+        assert_eq!(dto.adult_milestone, None);
+        assert_eq!(dto.adult_milestone_progress, 0);
+        assert_eq!(dto.adult_milestone_completed_at, None);
     }
 }

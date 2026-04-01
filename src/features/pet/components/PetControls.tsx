@@ -10,10 +10,12 @@ const ACTIONS = [
   { label: 'Clean', action: 'clean' as const },
   { label: 'Heal', action: 'heal' as const },
   { label: 'Sleep', action: 'sleep' as const },
+  { label: 'Restart', action: 'restart' as const },
 ];
 
 export function PetControls({ disabled }: PetControlsProps) {
   const applyPetAction = usePetStore((state) => state.applyPetAction);
+  const lifeState = usePetStore((state) => state.pet.lifeState);
 
   return (
     <section className="controls">
@@ -23,7 +25,12 @@ export function PetControls({ disabled }: PetControlsProps) {
           <button
             key={action}
             className="control-button"
-            disabled={disabled}
+            disabled={
+              disabled ||
+              lifeState === 'egg' ||
+              (lifeState === 'dead' && action !== 'restart') ||
+              (lifeState === 'alive' && action === 'restart')
+            }
             onClick={() => {
               void applyPetAction(action);
             }}

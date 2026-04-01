@@ -33,8 +33,25 @@ export type PetStateDTO = {
   fun: number;
   cleanliness: number;
   energy: number;
+  health: number;
+  waste: number;
+  lifeState: 'egg' | 'alive' | 'dead';
+  isSick: boolean;
   isSleeping: boolean;
+  startedAt: string;
   lastUpdatedAt: string;
+  ageStage: 'baby' | 'child' | 'teen' | 'adult';
+  careScore: number;
+  careMistakes: number;
+  adultOutcome: 'balanced' | 'playful' | 'messy' | 'resilient' | null;
+  adultMilestone:
+    | 'steady-routine'
+    | 'showtime'
+    | 'spring-clean'
+    | 'recovery-run'
+    | null;
+  adultMilestoneProgress: number;
+  adultMilestoneCompletedAt: string | null;
 };
 
 export type SettingsDTO = {
@@ -106,8 +123,20 @@ export type SaveFailedEvent = {
   "fun": 72,
   "cleanliness": 80,
   "energy": 68,
+  "health": 84,
+  "waste": 12,
+  "lifeState": "alive",
+  "isSick": false,
   "isSleeping": false,
-  "lastUpdatedAt": "2026-04-01T17:00:00.000Z"
+  "startedAt": "2026-04-01T12:00:00.000Z",
+  "lastUpdatedAt": "2026-04-01T17:00:00.000Z",
+  "ageStage": "child",
+  "careScore": 14,
+  "careMistakes": 2,
+  "adultOutcome": null,
+  "adultMilestone": null,
+  "adultMilestoneProgress": 0,
+  "adultMilestoneCompletedAt": null
 }
 ```
 

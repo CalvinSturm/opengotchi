@@ -8,7 +8,9 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 use crate::error::{AppError, AppResult};
-use crate::models::pet::{LegacyPetSaveEnvelope, PetAgeStage, PetStateDto, PET_SAVE_VERSION};
+use crate::models::pet::{
+    LegacyPetSaveEnvelope, PetAgeStage, PetLifeState, PetStateDto, PET_SAVE_VERSION,
+};
 
 const SAVE_FILE_NAME: &str = "pet.json";
 const LEGACY_SAVE_FILE_NAME: &str = "pet-save.json";
@@ -108,6 +110,7 @@ fn convert_legacy_save(legacy_save: LegacyPetSaveEnvelope) -> AppResult<PetState
         energy: legacy_save.pet.energy,
         health: 84,
         waste: 12,
+        life_state: PetLifeState::Alive,
         is_sick: false,
         is_sleeping: legacy_save.pet.is_sleeping,
         started_at: last_updated_at.clone(),
@@ -116,6 +119,9 @@ fn convert_legacy_save(legacy_save: LegacyPetSaveEnvelope) -> AppResult<PetState
         care_score: 0,
         care_mistakes: 0,
         adult_outcome: None,
+        adult_milestone: None,
+        adult_milestone_progress: 0,
+        adult_milestone_completed_at: None,
     })
 }
 
@@ -261,9 +267,13 @@ mod tests {
         assert_eq!(pet.started_at, now);
         assert_eq!(pet.last_updated_at, now);
         assert_eq!(pet.age_stage, PetAgeStage::Baby);
+        assert_eq!(pet.life_state, PetLifeState::Egg);
         assert_eq!(pet.care_score, 0);
         assert_eq!(pet.care_mistakes, 0);
         assert_eq!(pet.adult_outcome, None);
+        assert_eq!(pet.adult_milestone, None);
+        assert_eq!(pet.adult_milestone_progress, 0);
+        assert_eq!(pet.adult_milestone_completed_at, None);
     }
 
     #[test]
@@ -292,6 +302,7 @@ mod tests {
         assert_eq!(pet.satiety, 75);
         assert_eq!(pet.health, 84);
         assert_eq!(pet.waste, 12);
+        assert_eq!(pet.life_state, PetLifeState::Alive);
         assert!(!pet.is_sick);
         assert_eq!(pet.started_at, "2024-04-01T17:00:00Z");
         assert_eq!(pet.last_updated_at, "2024-04-01T17:00:00Z");
@@ -299,6 +310,9 @@ mod tests {
         assert_eq!(pet.care_score, 0);
         assert_eq!(pet.care_mistakes, 0);
         assert_eq!(pet.adult_outcome, None);
+        assert_eq!(pet.adult_milestone, None);
+        assert_eq!(pet.adult_milestone_progress, 0);
+        assert_eq!(pet.adult_milestone_completed_at, None);
     }
 
     #[test]
@@ -323,12 +337,16 @@ mod tests {
 
         assert_eq!(pet.health, 84);
         assert_eq!(pet.waste, 12);
+        assert_eq!(pet.life_state, PetLifeState::Alive);
         assert!(!pet.is_sick);
         assert_eq!(pet.started_at, "2026-04-01T17:00:00.000Z");
         assert_eq!(pet.age_stage, PetAgeStage::Baby);
         assert_eq!(pet.care_score, 0);
         assert_eq!(pet.care_mistakes, 0);
         assert_eq!(pet.adult_outcome, None);
+        assert_eq!(pet.adult_milestone, None);
+        assert_eq!(pet.adult_milestone_progress, 0);
+        assert_eq!(pet.adult_milestone_completed_at, None);
     }
 
     #[test]
@@ -342,6 +360,7 @@ mod tests {
             "energy": 68,
             "health": 84,
             "waste": 12,
+            "lifeState": "dead",
             "isSick": false,
             "isSleeping": false,
             "startedAt": "2026-04-01T00:00:00.000Z",
@@ -349,7 +368,10 @@ mod tests {
             "ageStage": "adult",
             "careScore": 22,
             "careMistakes": 5,
-            "adultOutcome": "resilient"
+            "adultOutcome": "resilient",
+            "adultMilestone": "recovery-run",
+            "adultMilestoneProgress": 2,
+            "adultMilestoneCompletedAt": "2026-04-02T08:30:00.000Z"
         });
 
         let pet = resolve_loaded_pet(
@@ -361,9 +383,15 @@ mod tests {
 
         assert_eq!(pet.started_at, "2026-04-01T00:00:00.000Z");
         assert_eq!(pet.age_stage, PetAgeStage::Adult);
+        assert_eq!(pet.life_state, PetLifeState::Dead);
         assert_eq!(pet.care_score, 22);
         assert_eq!(pet.care_mistakes, 5);
         assert_eq!(pet.adult_outcome, Some(PetAdultOutcome::Resilient));
+        assert_eq!(
+            pet.adult_milestone_completed_at,
+            Some("2026-04-02T08:30:00.000Z".to_string())
+        );
+        assert_eq!(pet.adult_milestone_progress, 2);
     }
 
     #[test]

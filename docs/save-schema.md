@@ -23,8 +23,25 @@ export type PetStateDTO = {
   fun: number;
   cleanliness: number;
   energy: number;
+  health: number;
+  waste: number;
+  lifeState: 'egg' | 'alive' | 'dead';
+  isSick: boolean;
   isSleeping: boolean;
+  startedAt: string;
   lastUpdatedAt: string;
+  ageStage: 'baby' | 'child' | 'teen' | 'adult';
+  careScore: number;
+  careMistakes: number;
+  adultOutcome: 'balanced' | 'playful' | 'messy' | 'resilient' | null;
+  adultMilestone:
+    | 'steady-routine'
+    | 'showtime'
+    | 'spring-clean'
+    | 'recovery-run'
+    | null;
+  adultMilestoneProgress: number;
+  adultMilestoneCompletedAt: string | null;
 };
 
 export type SettingsDTO = {
@@ -39,9 +56,19 @@ export type SettingsDTO = {
 - `version` is required.
 - `lastUpdatedAt` is required.
 - `name` is required.
-- `satiety`, `fun`, `cleanliness`, and `energy` are required numeric fields.
+- `satiety`, `fun`, `cleanliness`, `energy`, `health`, and `waste` are required numeric fields.
 - pet stat values must stay in the inclusive range `0..100`.
+- `lifeState` is required.
+- `lifeState: "egg"` is the default when no save exists yet.
+- `isSick` is required.
 - `isSleeping` is required.
+- `startedAt` is required.
+- `ageStage` is required.
+- `careScore` and `careMistakes` are required.
+- `adultOutcome` is required and may be `null`.
+- `adultMilestone` is required and may be `null`.
+- `adultMilestoneProgress` is required.
+- `adultMilestoneCompletedAt` is required and may be `null`.
 
 ## SettingsDTO Rules
 
@@ -85,8 +112,20 @@ export type SettingsDTO = {
   "fun": 72,
   "cleanliness": 80,
   "energy": 68,
+  "health": 84,
+  "waste": 12,
+  "lifeState": "alive",
+  "isSick": false,
   "isSleeping": false,
-  "lastUpdatedAt": "2026-04-01T17:00:00.000Z"
+  "startedAt": "2026-04-01T12:00:00.000Z",
+  "lastUpdatedAt": "2026-04-01T17:00:00.000Z",
+  "ageStage": "child",
+  "careScore": 14,
+  "careMistakes": 2,
+  "adultOutcome": null,
+  "adultMilestone": null,
+  "adultMilestoneProgress": 0,
+  "adultMilestoneCompletedAt": null
 }
 ```
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { PetControls } from '../features/pet/components/PetControls';
+import { PetNurseryPanel } from '../features/pet/components/PetNurseryPanel';
 import { PetStatusPanel } from '../features/pet/components/PetStatusPanel';
 import { useSettingsStore } from '../features/settings/store/settingsStore';
 import { SystemPanel } from '../features/system/components/SystemPanel';
@@ -114,6 +115,7 @@ export function App() {
       </section>
 
       <PetStatusPanel alerts={alerts} pet={pet} status={status} />
+      <PetNurseryPanel disabled={status === 'loading'} />
       <PetControls disabled={status === 'loading'} />
       <SystemPanel />
 

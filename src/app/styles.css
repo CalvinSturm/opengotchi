@@ -94,6 +94,11 @@ select {
   max-width: 26rem;
 }
 
+.panel-copy {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
 .panel {
   padding: 1rem;
 }
@@ -244,6 +249,34 @@ select {
   margin-top: 0.25rem;
 }
 
+.milestone-card {
+  border: 1px solid rgba(121, 188, 255, 0.2);
+  border-radius: 1.1rem;
+  margin-top: 1rem;
+  padding: 0.95rem 1rem;
+  background: linear-gradient(135deg, rgba(121, 188, 255, 0.12), rgba(255, 255, 255, 0.03));
+}
+
+.milestone-card h4,
+.milestone-card p {
+  margin: 0;
+}
+
+.milestone-header {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.milestone-card p + p {
+  margin-top: 0.45rem;
+}
+
+.milestone-reward {
+  color: var(--muted);
+}
+
 .alert-empty,
 .attention-alert {
   border-radius: 1rem;
@@ -307,11 +340,39 @@ select {
   padding: 1rem;
 }
 
+.field-stack {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field-stack span {
+  font-weight: 600;
+}
+
+.text-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.9rem;
+  color: inherit;
+  min-height: 2.8rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.text-input:focus {
+  border-color: rgba(247, 187, 68, 0.42);
+  outline: none;
+}
+
 .control-grid {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 0.85rem;
+}
+
+.nursery-button {
+  margin-top: 0.9rem;
+  width: 100%;
 }
 
 .control-button {

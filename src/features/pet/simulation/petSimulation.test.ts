@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDefaultPetState, parseIsoTimestamp } from '../model';
+import {
+  createDefaultPetState,
+  createEggPetState,
+  createLivePetState,
+  parseIsoTimestamp,
+} from '../model';
 import {
   applyAction,
   applyDecay,
@@ -14,7 +19,7 @@ import {
 
 describe('pet simulation', () => {
   it('applies awake decay in full-minute steps', () => {
-    const pet = createDefaultPetState(0);
+    const pet = createLivePetState(0);
     const next = applyDecay(pet, 180_000);
 
     expect(next.satiety).toBe(72);
@@ -29,7 +34,7 @@ describe('pet simulation', () => {
 
   it('restores energy while sleeping', () => {
     const pet = {
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       energy: 20,
       isSleeping: true,
     };
@@ -43,6 +48,21 @@ describe('pet simulation', () => {
     expect(next.careScore).toBe(4);
   });
 
+  it('keeps egg pets frozen until hatch and starts the run on hatch', () => {
+    const eggPet = createEggPetState(0, 'Nova');
+
+    const decayedEgg = applyDecay(eggPet, 300_000);
+    const hatchedPet = applyAction(eggPet, 'hatch', 120_000);
+
+    expect(decayedEgg.lifeState).toBe('egg');
+    expect(decayedEgg.lastUpdatedAt).toBe(eggPet.lastUpdatedAt);
+    expect(deriveMood(eggPet)).toBe('egg');
+    expect(hatchedPet.lifeState).toBe('alive');
+    expect(hatchedPet.name).toBe('Nova');
+    expect(hatchedPet.startedAt).toBe('1970-01-01T00:02:00.000Z');
+    expect(hatchedPet.lastUpdatedAt).toBe('1970-01-01T00:02:00.000Z');
+  });
+
   it('derives life stage from lifetime elapsed since startedAt', () => {
     expect(deriveAgeStage('2026-04-01T00:00:00.000Z', Date.parse('2026-04-01T00:30:00.000Z'))).toBe('baby');
     expect(deriveAgeStage('2026-04-01T00:00:00.000Z', Date.parse('2026-04-01T02:00:00.000Z'))).toBe('child');
@@ -53,7 +73,7 @@ describe('pet simulation', () => {
   it('derives adult outcome from accumulated care quality', () => {
     expect(
       deriveAdultOutcome({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         careScore: 36,
         careMistakes: 4,
         fun: 80,
@@ -62,7 +82,7 @@ describe('pet simulation', () => {
 
     expect(
       deriveAdultOutcome({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         careScore: 20,
         careMistakes: 10,
         health: 76,
@@ -71,7 +91,7 @@ describe('pet simulation', () => {
 
     expect(
       deriveAdultOutcome({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         careScore: 8,
         careMistakes: 22,
         waste: 72,
@@ -82,28 +102,28 @@ describe('pet simulation', () => {
   it('derives mood from the current needs', () => {
     expect(
       deriveMood({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         isSleeping: true,
       }),
     ).toBe('sleeping');
 
     expect(
       deriveMood({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         isSick: true,
       }),
     ).toBe('sick');
 
     expect(
       deriveMood({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         satiety: 12,
       }),
     ).toBe('hungry');
 
     expect(
       deriveMood({
-        ...createDefaultPetState(0),
+        ...createLivePetState(0),
         satiety: 84,
         fun: 88,
         cleanliness: 90,
@@ -116,7 +136,7 @@ describe('pet simulation', () => {
 
   it('derives ordered attention alerts from the current pet state', () => {
     const alerts = deriveAlerts({
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       satiety: 18,
       cleanliness: 14,
       energy: 16,
@@ -137,7 +157,7 @@ describe('pet simulation', () => {
 
   it('formats alert notifications from derived gameplay alerts', () => {
     const [alert] = deriveAlerts({
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       satiety: 10,
     });
 
@@ -149,7 +169,7 @@ describe('pet simulation', () => {
 
   it('damages health and can trigger sickness under neglect', () => {
     const pet = {
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       satiety: 20,
       cleanliness: 10,
       energy: 15,
@@ -167,7 +187,7 @@ describe('pet simulation', () => {
 
   it('applies the playful adult modifier to play actions', () => {
     const pet = {
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       ageStage: 'adult' as const,
       adultOutcome: 'playful' as const,
       fun: 40,
@@ -182,7 +202,7 @@ describe('pet simulation', () => {
 
   it('applies the messy adult modifier to cleanup and waste decay', () => {
     const pet = {
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       ageStage: 'adult' as const,
       adultOutcome: 'messy' as const,
       cleanliness: 40,
@@ -199,7 +219,7 @@ describe('pet simulation', () => {
 
   it('applies the resilient adult modifier to healing and health decay', () => {
     const pet = {
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       ageStage: 'adult' as const,
       adultOutcome: 'resilient' as const,
       satiety: 10,
@@ -219,7 +239,7 @@ describe('pet simulation', () => {
 
   it('applies actions without breaking stat bounds', () => {
     const pet = {
-      ...createDefaultPetState(0),
+      ...createLivePetState(0),
       satiety: 95,
       cleanliness: 3,
       energy: 5,
@@ -244,9 +264,25 @@ describe('pet simulation', () => {
     expect(parseIsoTimestamp(healed.lastUpdatedAt)).toBe(200);
   });
 
+  it('recomputes sickness immediately after healing', () => {
+    const pet = {
+      ...createLivePetState(0),
+      health: 20,
+      cleanliness: 8,
+      waste: 95,
+      isSick: true,
+    };
+
+    const healed = applyAction(pet, 'heal', 100);
+
+    expect(healed.health).toBe(38);
+    expect(healed.isSick).toBe(true);
+    expect(healed.lifeState).toBe('alive');
+  });
+
   it('catches up from the last saved timestamp', () => {
     const pet = {
-      ...createDefaultPetState(10_000),
+      ...createLivePetState(10_000),
       cleanliness: 12,
       health: 40,
       waste: 88,
@@ -265,7 +301,7 @@ describe('pet simulation', () => {
 
   it('advances life stage during offline catchup', () => {
     const pet = {
-      ...createDefaultPetState(Date.parse('2026-04-01T00:00:00.000Z')),
+      ...createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
       lastUpdatedAt: '2026-04-01T05:00:00.000Z',
     };
 
@@ -277,7 +313,7 @@ describe('pet simulation', () => {
 
   it('assigns an adult outcome once when the pet reaches adulthood', () => {
     const pet = {
-      ...createDefaultPetState(Date.parse('2026-04-01T00:00:00.000Z')),
+      ...createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
       ageStage: 'teen' as const,
       careScore: 34,
       careMistakes: 6,
@@ -293,7 +329,7 @@ describe('pet simulation', () => {
 
   it('keeps an assigned adult outcome stable after adulthood', () => {
     const pet = {
-      ...createDefaultPetState(Date.parse('2026-04-01T00:00:00.000Z')),
+      ...createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
       ageStage: 'adult' as const,
       adultOutcome: 'balanced' as const,
       careScore: 12,
@@ -305,5 +341,69 @@ describe('pet simulation', () => {
 
     expect(next.ageStage).toBe('adult');
     expect(next.adultOutcome).toBe('balanced');
+  });
+
+  it('marks the pet dead when health reaches zero and exposes a restart path', () => {
+    const pet = {
+      ...createLivePetState(0),
+      name: 'Byte',
+      satiety: 0,
+      cleanliness: 0,
+      energy: 0,
+      health: 2,
+      waste: 100,
+    };
+
+    const deadPet = applyDecay(pet, 60_000);
+    const restartedPet = applyAction(deadPet, 'restart', 120_000);
+
+    expect(deadPet.health).toBe(0);
+    expect(deadPet.lifeState).toBe('dead');
+    expect(deadPet.isSick).toBe(true);
+    expect(deriveAlerts(deadPet).map((alert) => alert.code)).toEqual(['dead']);
+    expect(deriveMood(deadPet)).toBe('dead');
+    expect(restartedPet.lifeState).toBe('egg');
+    expect(restartedPet.name).toBe('Byte');
+    expect(restartedPet.health).toBe(84);
+    expect(restartedPet.ageStage).toBe('baby');
+  });
+
+  it('tracks and completes adult milestones for adult pets', () => {
+    const balancedAdult = {
+      ...createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
+      ageStage: 'adult' as const,
+      adultOutcome: 'balanced' as const,
+      satiety: 82,
+      fun: 80,
+      cleanliness: 84,
+      energy: 80,
+      health: 88,
+      waste: 12,
+      lastUpdatedAt: '2026-04-02T00:00:00.000Z',
+    };
+    const playfulAdult = {
+      ...createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
+      ageStage: 'adult' as const,
+      adultOutcome: 'playful' as const,
+      lastUpdatedAt: '2026-04-02T00:00:00.000Z',
+    };
+
+    const progressedBalanced = catchup(
+      balancedAdult,
+      Date.parse('2026-04-02T00:06:00.000Z'),
+    );
+    const showtime1 = applyAction(playfulAdult, 'play', Date.parse('2026-04-02T00:01:00.000Z'));
+    const showtime2 = applyAction(showtime1, 'play', Date.parse('2026-04-02T00:02:00.000Z'));
+    const showtime3 = applyAction(showtime2, 'play', Date.parse('2026-04-02T00:03:00.000Z'));
+    const completedShowtime = applyAction(showtime3, 'play', Date.parse('2026-04-02T00:04:00.000Z'));
+    const rewardedPlay = applyAction(completedShowtime, 'play', Date.parse('2026-04-02T00:05:00.000Z'));
+
+    expect(progressedBalanced.adultMilestone).toBe('steady-routine');
+    expect(progressedBalanced.adultMilestoneCompletedAt).toBe('2026-04-02T00:06:00.000Z');
+    expect(progressedBalanced.adultMilestoneProgress).toBe(6);
+    expect(completedShowtime.adultMilestone).toBe('showtime');
+    expect(completedShowtime.adultMilestoneProgress).toBe(4);
+    expect(completedShowtime.adultMilestoneCompletedAt).toBe('2026-04-02T00:04:00.000Z');
+    expect(rewardedPlay.fun).toBe(100);
   });
 });
