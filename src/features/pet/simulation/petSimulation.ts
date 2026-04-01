@@ -42,6 +42,15 @@ export type PetAlert = {
   label: string;
   message: string;
 };
+export type PetActionRecommendation = {
+  action: PetAction;
+  priority: 'primary' | 'secondary';
+  reason: string;
+};
+export type PetStatusInsight = {
+  headline: string;
+  detail: string;
+};
 
 const DECAY_STEP_MS = 60_000;
 const LOW_NEED_THRESHOLD = 20;
@@ -362,6 +371,221 @@ export function getAdultMilestonePresentation(state: PetState): {
     progress: state.adultMilestoneProgress,
     target: getAdultMilestoneTarget(state.adultMilestone),
     completed: state.adultMilestoneCompletedAt !== null,
+  };
+}
+
+function pushRecommendation(
+  recommendations: PetActionRecommendation[],
+  recommendation: PetActionRecommendation,
+): void {
+  if (recommendations.some((item) => item.action === recommendation.action)) {
+    return;
+  }
+
+  recommendations.push(recommendation);
+}
+
+export function deriveRecommendedActions(
+  state: PetState,
+): PetActionRecommendation[] {
+  const recommendations: PetActionRecommendation[] = [];
+
+  if (state.lifeState === 'egg') {
+    return [
+      {
+        action: 'hatch',
+        priority: 'primary',
+        reason: 'Begin the run from the nursery.',
+      },
+    ];
+  }
+
+  if (state.lifeState === 'dead') {
+    return [
+      {
+        action: 'restart',
+        priority: 'primary',
+        reason: 'Start a new run from a fresh egg.',
+      },
+    ];
+  }
+
+  if (state.isSick) {
+    pushRecommendation(recommendations, {
+      action: 'heal',
+      priority: 'primary',
+      reason: 'Condition is sick and needs treatment first.',
+    });
+  }
+
+  if (state.waste >= CLEANUP_ALERT_THRESHOLD || state.cleanliness <= DIRTY_THRESHOLD) {
+    pushRecommendation(recommendations, {
+      action: 'clean',
+      priority: recommendations.length === 0 ? 'primary' : 'secondary',
+      reason:
+        state.waste >= CLEANUP_ALERT_THRESHOLD
+          ? 'Waste buildup is driving the current risk.'
+          : 'Cleanliness is too low and needs attention.',
+    });
+  }
+
+  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+    pushRecommendation(recommendations, {
+      action: 'sleep',
+      priority: recommendations.length === 0 ? 'primary' : 'secondary',
+      reason: 'Energy is nearly depleted.',
+    });
+  }
+
+  if (state.satiety <= LOW_NEED_THRESHOLD) {
+    pushRecommendation(recommendations, {
+      action: 'feed',
+      priority: recommendations.length === 0 ? 'primary' : 'secondary',
+      reason: 'Satiety is overdue.',
+    });
+  }
+
+  if (recommendations.length > 0) {
+    return recommendations;
+  }
+
+  if (
+    state.lifeState === 'alive' &&
+    state.ageStage === 'adult' &&
+    state.adultMilestone &&
+    !state.adultMilestoneCompletedAt
+  ) {
+    switch (state.adultMilestone) {
+      case 'showtime':
+        pushRecommendation(recommendations, {
+          action: 'play',
+          priority: 'primary',
+          reason: 'Play advances the current adult milestone.',
+        });
+        break;
+      case 'spring-clean':
+        pushRecommendation(recommendations, {
+          action: 'clean',
+          priority: 'primary',
+          reason: 'Cleaning advances the current adult milestone.',
+        });
+        break;
+      case 'recovery-run':
+        pushRecommendation(recommendations, {
+          action: 'heal',
+          priority: 'primary',
+          reason: 'Recovery progress comes from successful healing.',
+        });
+        break;
+      case 'steady-routine':
+        pushRecommendation(recommendations, {
+          action: 'feed',
+          priority: 'primary',
+          reason: 'Consistent care keeps the routine milestone moving.',
+        });
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (recommendations.length === 0 && state.fun <= 35) {
+    pushRecommendation(recommendations, {
+      action: 'play',
+      priority: 'secondary',
+      reason: 'Fun is falling behind.',
+    });
+  }
+
+  return recommendations;
+}
+
+export function deriveStatusInsight(state: PetState): PetStatusInsight {
+  if (state.lifeState === 'egg') {
+    return {
+      headline: 'Nursery phase',
+      detail: 'Name the egg and hatch it to begin the run. Decay is paused until then.',
+    };
+  }
+
+  if (state.lifeState === 'dead') {
+    return {
+      headline: 'Run ended',
+      detail: 'This pet has passed on. Restart to begin a new run from a fresh egg.',
+    };
+  }
+
+  const recommendations = deriveRecommendedActions(state);
+  const primaryRecommendation = recommendations.find(
+    (recommendation) => recommendation.priority === 'primary',
+  );
+
+  if (state.isSick) {
+    if (state.waste >= CLEANUP_ALERT_THRESHOLD) {
+      return {
+        headline: 'Condition: sick',
+        detail: 'Waste buildup made the pet sick. Heal first, then clean before the condition spirals again.',
+      };
+    }
+
+    if (state.cleanliness <= DIRTY_THRESHOLD) {
+      return {
+        headline: 'Condition: sick',
+        detail: 'Poor hygiene pushed the pet into a sick condition. Heal now and clean soon after.',
+      };
+    }
+
+    return {
+      headline: 'Condition: sick',
+      detail: 'The pet needs treatment now. Stabilize the condition before spending time on lower-priority actions.',
+    };
+  }
+
+  if (state.waste >= CLEANUP_ALERT_THRESHOLD) {
+    return {
+      headline: 'Cleanup is overdue',
+      detail: 'Waste is the biggest current risk. Clean now to reduce the chance of sickness.',
+    };
+  }
+
+  if (!state.isSleeping && state.energy <= LOW_NEED_THRESHOLD) {
+    return {
+      headline: 'Energy is critical',
+      detail: 'Sleep should come next. Low energy is contributing to the current risk stack.',
+    };
+  }
+
+  if (state.satiety <= LOW_NEED_THRESHOLD) {
+    return {
+      headline: 'Satiety is low',
+      detail: 'Feed the pet soon before neglect starts converting into bigger condition problems.',
+    };
+  }
+
+  if (
+    state.lifeState === 'alive' &&
+    state.ageStage === 'adult' &&
+    state.adultMilestone &&
+    !state.adultMilestoneCompletedAt &&
+    primaryRecommendation
+  ) {
+    return {
+      headline: 'Adult goal in progress',
+      detail: primaryRecommendation.reason,
+    };
+  }
+
+  if (state.isSleeping) {
+    return {
+      headline: 'Resting',
+      detail: 'Sleep is restoring energy and slowing decay. Wake the pet when you are ready to act again.',
+    };
+  }
+
+  return {
+    headline: 'Condition: stable',
+    detail: primaryRecommendation?.reason ??
+      'No urgent problems right now. Keep the routine balanced to avoid avoidable condition swings.',
   };
 }
 

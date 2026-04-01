@@ -1,5 +1,7 @@
 import type { PetAdultOutcome, PetState } from '../model';
 import {
+  deriveRecommendedActions,
+  deriveStatusInsight,
   deriveMood,
   getAdultMilestonePresentation,
   type PetAlert,
@@ -12,11 +14,11 @@ type PetStatusPanelProps = {
 };
 
 type PetStatKey =
-  | 'satiety'
-  | 'fun'
-  | 'cleanliness'
-  | 'energy'
   | 'health'
+  | 'energy'
+  | 'satiety'
+  | 'cleanliness'
+  | 'fun'
   | 'waste';
 
 const STAT_LABELS: Array<{
@@ -24,11 +26,11 @@ const STAT_LABELS: Array<{
   valueKey: PetStatKey;
   tone?: 'default' | 'danger';
 }> = [
-  { label: 'Satiety', valueKey: 'satiety' },
-  { label: 'Fun', valueKey: 'fun' },
-  { label: 'Cleanliness', valueKey: 'cleanliness' },
+  { label: 'Vitality', valueKey: 'health' },
   { label: 'Energy', valueKey: 'energy' },
-  { label: 'Health', valueKey: 'health' },
+  { label: 'Satiety', valueKey: 'satiety' },
+  { label: 'Cleanliness', valueKey: 'cleanliness' },
+  { label: 'Fun', valueKey: 'fun' },
   { label: 'Waste', valueKey: 'waste', tone: 'danger' },
 ];
 
@@ -69,25 +71,41 @@ const OUTCOME_PRESENTATION: Record<
 
 export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
   const mood = deriveMood(pet);
-  const summaryText = pet.lifeState === 'egg'
-    ? 'Waiting to hatch.'
+  const statusInsight = deriveStatusInsight(pet);
+  const recommendedActions = deriveRecommendedActions(pet)
+    .filter((recommendation) => recommendation.action !== 'hatch');
+  const recommendationSummary = recommendedActions.length === 0
+    ? 'No urgent action right now.'
+    : recommendedActions
+      .map((recommendation) => {
+        const label = recommendation.action.charAt(0).toUpperCase() +
+          recommendation.action.slice(1);
+
+        return `${label}${recommendation.priority === 'primary' ? ' now' : ' soon'}`;
+      })
+      .join(' then ');
+  const evolutionText = pet.lifeState === 'egg'
+    ? 'Adult outcome unlocks after the run begins.'
     : pet.lifeState === 'dead'
-      ? 'This pet has passed on. Restart to begin a new run.'
-      : alerts[0]?.message ??
-      (pet.isSleeping ? 'Resting quietly.' : 'Ready for the next action.');
-  const outcomeText = pet.lifeState === 'egg'
-    ? 'Adult outcome will unlock later in the run.'
-    : pet.lifeState === 'dead'
-      ? 'Run ended.'
+      ? 'This run has ended.'
       : pet.adultOutcome
         ? `Adult outcome: ${pet.adultOutcome}.`
         : pet.ageStage === 'adult'
-          ? 'Adult outcome pending.'
+          ? 'Adult outcome is about to lock in.'
           : 'Adult outcome not locked in yet.';
   const outcomePresentation = pet.adultOutcome
     ? OUTCOME_PRESENTATION[pet.adultOutcome]
     : null;
   const milestonePresentation = getAdultMilestonePresentation(pet);
+  const conditionLabel = pet.lifeState === 'dead'
+    ? 'Ended'
+    : pet.lifeState === 'egg'
+      ? 'Nursery'
+      : pet.isSick
+        ? 'Sick'
+        : pet.isSleeping
+          ? 'Sleeping'
+          : 'Stable';
 
   return (
     <section className="panel" aria-live="polite">
@@ -116,11 +134,25 @@ export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
           <p>
             Stage: <strong>{pet.ageStage}</strong>
           </p>
-          <p>
-            Mood: <strong>{mood}</strong>
-          </p>
-          <p>{summaryText}</p>
-          <p>{outcomeText}</p>
+          <div className="condition-strip" aria-label="Current condition summary">
+            <div>
+              <span className="condition-label">Condition</span>
+              <strong>{conditionLabel}</strong>
+            </div>
+            <div>
+              <span className="condition-label">Mood</span>
+              <strong>{mood}</strong>
+            </div>
+            <div>
+              <span className="condition-label">Next up</span>
+              <strong>{recommendationSummary}</strong>
+            </div>
+          </div>
+          <section className="status-insight" aria-label="Current care guidance">
+            <p className="status-insight-kicker">{statusInsight.headline}</p>
+            <p>{statusInsight.detail}</p>
+          </section>
+          <p>{evolutionText}</p>
           <div className="pet-flags">
             <span className="pet-flag">{pet.ageStage}</span>
             <span
@@ -130,9 +162,6 @@ export function PetStatusPanel({ pet, alerts, status }: PetStatusPanelProps) {
             </span>
             <span className="pet-flag">
               Care {pet.careScore} / Mistakes {pet.careMistakes}
-            </span>
-            <span className={`pet-flag ${pet.isSick ? 'pet-flag-danger' : ''}`}>
-              {pet.isSick ? 'Sick' : 'Stable'}
             </span>
             <span className={`pet-flag ${pet.waste >= 70 ? 'pet-flag-danger' : ''}`}>
               Waste {pet.waste >= 70 ? 'High' : 'Okay'}

@@ -14,6 +14,8 @@ import {
   deriveAgeStage,
   deriveAlerts,
   deriveAdultOutcome,
+  deriveRecommendedActions,
+  deriveStatusInsight,
   deriveMood,
 } from './petSimulation';
 
@@ -165,6 +167,41 @@ describe('pet simulation', () => {
 
     expect(notification.title).toBe('Byte needs attention');
     expect(notification.body).toContain('Feeding is overdue');
+  });
+
+  it('derives prioritized recommended actions from current risks', () => {
+    const recommendations = deriveRecommendedActions({
+      ...createLivePetState(0),
+      cleanliness: 8,
+      waste: 94,
+      isSick: true,
+    });
+
+    expect(recommendations).toEqual([
+      {
+        action: 'heal',
+        priority: 'primary',
+        reason: 'Condition is sick and needs treatment first.',
+      },
+      {
+        action: 'clean',
+        priority: 'secondary',
+        reason: 'Waste buildup is driving the current risk.',
+      },
+    ]);
+  });
+
+  it('describes the current condition with cause and next-step guidance', () => {
+    const insight = deriveStatusInsight({
+      ...createLivePetState(0),
+      cleanliness: 12,
+      waste: 90,
+      isSick: true,
+    });
+
+    expect(insight.headline).toBe('Condition: sick');
+    expect(insight.detail).toContain('Waste buildup made the pet sick');
+    expect(insight.detail).toContain('Heal first, then clean');
   });
 
   it('damages health and can trigger sickness under neglect', () => {

@@ -1,12 +1,10 @@
 import { useEffect } from 'react';
 
-import { PetControls } from '../features/pet/components/PetControls';
-import { PetNurseryPanel } from '../features/pet/components/PetNurseryPanel';
-import { PetStatusPanel } from '../features/pet/components/PetStatusPanel';
 import { useSettingsStore } from '../features/settings/store/settingsStore';
 import { SystemPanel } from '../features/system/components/SystemPanel';
 import { buildPetReminderSyncPayload } from '../features/system/reminderSync';
 import { subscribeToDesktopEvents } from '../features/system/tauriEvents';
+import { TamagotchiDevice } from '../features/pet/components/TamagotchiDevice';
 import { usePetStore } from '../features/pet/store/petStore';
 import { showMainWindow, syncPetReminder } from '../lib/tauri/appCommands';
 
@@ -99,18 +97,7 @@ export function App() {
 
   return (
     <main className="shell">
-      <section className="hero-card">
-        <p className="eyebrow">Desktop Pet Bootstrap</p>
-        <h1>OpenGotchi</h1>
-        <p className="hero-copy">
-          A minimal Tauri desktop pet with a TypeScript simulation core and a
-          narrow Rust persistence edge.
-        </p>
-      </section>
-
-      <PetStatusPanel alerts={alerts} pet={pet} status={status} />
-      <PetNurseryPanel disabled={status === 'loading'} />
-      <PetControls disabled={status === 'loading'} />
+      <TamagotchiDevice disabled={status === 'loading'} />
       <SystemPanel />
 
       {saveMessage ? <p className="save-banner">{saveMessage}</p> : null}
