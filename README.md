@@ -1,54 +1,37 @@
 # OpenGotchi
 
-Minimal Tauri 2 desktop pet bootstrap with:
+Desktop Tamagotchi-style pet game built with:
 
 - React + TypeScript + Vite frontend
 - Zustand state store
 - Zod DTO validation
-- Pure TypeScript pet simulation
-- Rust backend limited to persistence and desktop integration boundaries
+- Pure TypeScript simulation
+- Tauri 2 desktop shell
+- Rust persistence, tray, notification, and window services
 
 ## Current Scope
 
 Implemented now:
 
-- Pet status UI
-- Egg to alive to dead pet lifecycle
+- Gen 2-inspired device UI with shell art background, LCD overlay, and three-button `A / B / C` controls
+- Egg -> alive -> dead lifecycle
 - Hatch flow with pre-run naming
 - Feed, play, clean, heal, sleep, and restart actions
-- Frontend listeners for tray and save-status events
-- Minimal settings/system UI
-- Pure simulation functions in `src/features/pet/simulation`
-- Adult milestones with outcome-based progress and rewards
+- Adult outcomes and one adult milestone per outcome
+- Minute-based decay with offline catch-up and aligned wake scheduling
 - Desktop-owned reminder cooldown and repeat scheduling
-- Integration tests for stores, reminder sync, and desktop event wiring
-- Tauri command roundtrip for:
-  - `load_pet`
-  - `save_pet`
-- Pet persistence in Rust
-- Settings persistence in Rust
-- Window/system commands for:
-  - show/hide main window
-  - always-on-top toggle
-  - reveal save folder
-  - quit app
-- Desktop notification command
-- Tray event emission for:
-  - `tray://open-main-window`
-  - `tray://feed-shortcut`
-  - `tray://play-shortcut`
-- Save status event emission for:
-  - `pet://save-completed`
-  - `pet://save-failed`
-- Versioned pet DTO with offline catch-up
+- Explicit save status UX:
+  - `saving`
+  - `unsaved`
+  - `synced`
+- Serialized pet-store mutations to avoid refresh/action races
+- Save-status event matching via per-save operation IDs
+- Frontend listeners for tray and save-status events
+- Settings/system UI
+- Dev-only runtime tuning panel behind backtick and build gating
+- Rust pet/settings persistence with atomic writes
 - Legacy read compatibility for the previous `pet-save.json` envelope format
-
-Scaffolded but still minimal:
-
-- Tray service
-- Notification service
-- Window service
-- Architecture and IPC docs
+- Integration tests for stores, reminder sync, device UI helpers, and desktop event wiring
 
 ## Stack
 
@@ -65,6 +48,7 @@ Scaffolded but still minimal:
 - Frontend UI lives in `src/app` and `src/features/pet/components`
 - Frontend state coordination lives in `src/features/pet/store`
 - Gameplay simulation lives in `src/features/pet/simulation`
+- Root `assets/` holds shell/background art consumed by the frontend
 - Frontend Tauri wrappers live in `src/lib/tauri`
 - Thin Rust commands live in `src-tauri/src/commands`
 - Rust services live in `src-tauri/src/services`
@@ -124,18 +108,28 @@ export type PetStateDTO = {
 - stat values are clamped to `0..100`
 - load path applies offline catch-up in TypeScript before the state becomes active
 
+## Runtime Save Semantics
+
+- Pet mutations are serialized through the Zustand store rather than running concurrently.
+- The frontend updates in-memory pet state first, then persists through Rust.
+- Save attempts carry an operation ID so async completion and failure events can be matched to the correct mutation.
+- If a save fails, the current pet stays live in memory and is marked `unsaved`.
+- A later refresh or mutation retries persistence automatically.
+
 ## Next Steps
 
 Current implementation priorities:
 
 1. Expand post-adult content beyond a single milestone per adult outcome.
-2. Decide whether reminder policy needs persisted cooldown state across full app restarts.
-3. Add higher-level app rendering tests once a browser-capable test setup is in place.
+2. Decide whether reminder cooldown state should persist across full app restarts.
+3. Add higher-level rendering tests around the actual device shell and overlay alignment.
+4. Replace text LCD menu labels with icon-faithful pixel menu art.
 
 ## Project Layout
 
 ```text
 .
+|-- assets/
 |-- docs/
 |-- src/
 |   |-- app/
@@ -180,6 +174,12 @@ Run the Tauri app in development:
 npm run tauri -- dev
 ```
 
+Windows launcher:
+
+```bat
+start-opengotchi.bat
+```
+
 Build the desktop app:
 
 ```bash
@@ -196,8 +196,10 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 - Rust writes pet data to the Tauri app data directory
 - Current target file name is `pet.json`
+- Current settings file name is `settings.json`
 - The Rust load path can still read the previous `pet-save.json` envelope format
 - Frontend persistence goes only through `invoke()`
+- Pet and settings writes use atomic replace semantics with temp/backup files
 
 ## Verification
 

@@ -2,9 +2,8 @@
 
 ## Scope
 
-- This document defines the MVP IPC boundary.
-- Today, the bootstrap already uses `invoke()` for pet and settings persistence.
-- Commands and events listed here that are not yet in code are planned interfaces, not implemented facts.
+- This document defines the current IPC boundary.
+- All commands and events listed here reflect implemented behavior in the current repo state.
 
 ## Tauri IPC Model
 
@@ -77,10 +76,12 @@ export type PetReminderSyncDTO = {
 };
 
 export type SaveCompletedEvent = {
+  operationId: string;
   savedAt: string;
 };
 
 export type SaveFailedEvent = {
+  operationId: string;
   message: string;
 };
 ```
@@ -90,8 +91,9 @@ export type SaveFailedEvent = {
 - `load_pet(): Promise<PetStateDTO>`
   - loads the current pet state from disk
   - if no save exists, Rust returns a default `PetStateDTO`
-- `save_pet(payload: PetStateDTO): Promise<void>`
+- `save_pet(operationId: string, payload: PetStateDTO): Promise<void>`
   - persists the current pet state
+  - `operationId` is generated on the frontend and echoed back in async save-status events
 - `load_settings(): Promise<SettingsDTO>`
   - loads persisted app settings
 - `save_settings(payload: SettingsDTO): Promise<void>`
@@ -179,6 +181,9 @@ export type SaveFailedEvent = {
 - In the MVP, command errors should reject the `invoke()` Promise with a message string.
 - The frontend should not rely on mixed success/error union payloads for commands.
 - `pet://save-failed` is the event-side failure signal for async or background save status.
+- `pet://save-completed` and `pet://save-failed` both include the originating `operationId`.
+- Frontend pet state is optimistic: the current pet stays live in memory even if persistence fails.
+- Save failure means the state is marked unsaved, not silently reverted.
 - Do not return both a success payload and an embedded error object from the same command response.
 
 ## Versioning

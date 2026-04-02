@@ -2,8 +2,8 @@
 
 ## Scope
 
-- This document defines the intended MVP on-disk format.
-- If current code still uses a different temporary save layout, treat this file as the target save contract.
+- This document defines the current on-disk format.
+- Rust owns disk layout, validation, and migration before values are returned to the frontend.
 
 ## File Locations
 
@@ -86,6 +86,17 @@ export type SettingsDTO = {
   - TypeScript applies catch-up before the state becomes active UI state
 - After catch-up, the updated `PetStateDTO` may be written back through Rust persistence.
 
+## Save Reliability Semantics
+
+- Pet and settings writes use atomic replace semantics where practical:
+  - write temp file
+  - flush temp file
+  - rename existing file to backup
+  - rename temp file into place
+- Async pet save status is not persisted in the save file.
+- Save operation IDs are IPC-only correlation values and never appear in `pet.json`.
+- If a pet save fails, the current in-memory pet may continue running as `unsaved` until a later retry succeeds.
+
 ## Versioning Strategy
 
 - Start at `version: 1`.
@@ -147,3 +158,4 @@ export type SettingsDTO = {
 - Frontend must not choose save paths.
 - Save files must remain plain JSON.
 - Rust should validate decoded save data before returning it across IPC.
+- Rust can read the legacy `pet-save.json` envelope and normalize it into the current `pet.json` DTO shape.

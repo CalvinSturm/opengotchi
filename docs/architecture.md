@@ -25,6 +25,7 @@
   - own pet simulation logic
   - derive next `PetState`
   - run offline catch-up after loading persisted state
+  - build reminder sync payloads for the desktop layer
 - Rust:
   - own persistence
   - own tray integration
@@ -37,10 +38,11 @@
 1. User clicks a UI control.
 2. Frontend store passes the action to pure TypeScript simulation code.
 3. Simulation returns the next `PetState`.
-4. Zustand updates the in-memory state.
-5. If persistence or system integration is needed, the frontend calls a narrow Rust command with `invoke()`.
-6. Rust performs the side effect and returns a JSON-serializable result or error.
-7. Rust may emit one-way Tauri events back to the frontend for tray or save-status notifications.
+4. Zustand queues pet mutations so refreshes and player actions do not race each other.
+5. Zustand updates the in-memory state.
+6. If persistence or system integration is needed, the frontend calls a narrow Rust command with `invoke()`.
+7. Rust performs the side effect and returns a JSON-serializable result or error.
+8. Rust may emit one-way Tauri events back to the frontend for tray or save-status notifications.
 
 ## IPC Model
 
@@ -61,6 +63,11 @@
 - Rust command handlers stay thin.
 - Frontend does not touch the filesystem directly.
 - All IPC payloads are JSON-serializable.
+- Pet-store mutations are serialized through the frontend store.
+- Save completion and failure events are correlated by operation ID.
+- Save failures do not silently roll back the live pet; they leave the current state marked unsaved.
+- Reminder scheduling policy stays on the Rust side, but reminder derivation stays on the TypeScript side.
+- Dev tuning UI is a frontend-only tool and is gated behind build-time configuration.
 
 ## Directory Ownership Map
 
@@ -76,6 +83,8 @@
   - frontend pet DTO/model definitions
 - `src/lib/tauri`
   - frontend IPC wrappers around `invoke()`
+- `assets`
+  - shell/background artwork used by the frontend device UI
 - `src-tauri/src/commands`
   - thin Tauri command handlers
 - `src-tauri/src/services`
