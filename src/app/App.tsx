@@ -11,6 +11,9 @@ import { TamagotchiDevice } from '../features/pet/components/TamagotchiDevice';
 import { usePetStore } from '../features/pet/store/petStore';
 import { showMainWindow, syncPetReminder } from '../lib/tauri/appCommands';
 
+const DEV_TOOLS_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEVTOOLS === 'true';
+
 export function App() {
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const alerts = usePetStore((state) => state.alerts);
@@ -49,11 +52,11 @@ export function App() {
       onPlayShortcut: async () => {
         await applyPetAction('play');
       },
-      onSaveCompleted: (savedAt) => {
-        markSaveCompleted(savedAt);
+      onSaveCompleted: (operationId, savedAt) => {
+        markSaveCompleted(operationId, savedAt);
       },
-      onSaveFailed: (message) => {
-        markSaveFailed(message);
+      onSaveFailed: (operationId, message) => {
+        markSaveFailed(operationId, message);
       },
     }).then((dispose) => {
       unlisten = dispose;
@@ -68,10 +71,13 @@ export function App() {
     loadSettings,
     markSaveCompleted,
     markSaveFailed,
-    refresh,
   ]);
 
   useEffect(() => {
+    if (!DEV_TOOLS_ENABLED) {
+      return;
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditableTarget =
@@ -146,7 +152,7 @@ export function App() {
   return (
     <main className="shell">
       <TamagotchiDevice disabled={status === 'loading'} />
-      <DevToolsPanel open={devToolsOpen} />
+      {DEV_TOOLS_ENABLED ? <DevToolsPanel open={devToolsOpen} /> : null}
       <SystemPanel />
 
       {saveMessage ? <p className="save-banner">{saveMessage}</p> : null}

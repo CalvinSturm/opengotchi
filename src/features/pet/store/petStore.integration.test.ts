@@ -48,6 +48,15 @@ describe('pet store integration', () => {
 
     expect(petCommandsMock.loadPet).toHaveBeenCalledTimes(1);
     expect(petCommandsMock.savePet).toHaveBeenCalledTimes(1);
+    expect(petCommandsMock.savePet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: expect.any(String),
+        pet: expect.objectContaining({
+          name: 'Nova',
+          lifeState: 'alive',
+        }),
+      }),
+    );
     expect(state.status).toBe('ready');
     expect(state.draftName).toBe('Nova');
     expect(state.pet.name).toBe('Nova');
@@ -70,8 +79,11 @@ describe('pet store integration', () => {
     expect(state.draftName).toBe('Mochi');
     expect(petCommandsMock.savePet).toHaveBeenCalledWith(
       expect.objectContaining({
-        lifeState: 'alive',
-        name: 'Mochi',
+        operationId: expect.any(String),
+        pet: expect.objectContaining({
+          lifeState: 'alive',
+          name: 'Mochi',
+        }),
       }),
     );
   });
@@ -79,11 +91,16 @@ describe('pet store integration', () => {
   it('records save failure events in store state', async () => {
     const { usePetStore } = await loadPetStoreModule();
 
-    usePetStore.getState().markSaveFailed('disk unavailable');
+    usePetStore.setState({
+      pendingSaveOperationId: 'pet-save-1',
+      saveState: 'saving',
+    });
+    usePetStore.getState().markSaveFailed('pet-save-1', 'disk unavailable');
 
     expect(usePetStore.getState()).toMatchObject({
-      status: 'error',
-      errorMessage: 'disk unavailable',
+      status: 'idle',
+      saveState: 'dirty',
+      errorMessage: 'disk unavailable Changes are still in memory and marked unsaved.',
       saveMessage: null,
     });
   });
@@ -117,5 +134,103 @@ describe('pet store integration', () => {
 
     expect(usePetStore.getState().pet.lastUpdatedAt).toBe('2026-04-01T00:01:00.000Z');
     expect(petCommandsMock.savePet).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes overlapping actions so later mutations use the latest pet state', async () => {
+    vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'));
+
+    const modelModule = await import('../model');
+    const { usePetStore } = await loadPetStoreModule();
+
+    let releaseFirstSave!: () => void;
+
+    petCommandsMock.savePet
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseFirstSave = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    usePetStore.setState({
+      pet: {
+        ...modelModule.createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
+        satiety: 50,
+        fun: 40,
+        cleanliness: 70,
+        energy: 60,
+        health: 84,
+        waste: 10,
+      },
+      alerts: [],
+      status: 'ready',
+      draftName: 'Byte',
+      errorMessage: null,
+      saveMessage: null,
+      saveState: 'idle',
+      pendingSaveOperationId: null,
+      lastResolvedSaveOperationId: null,
+    });
+
+    const feedPromise = usePetStore.getState().applyPetAction('feed');
+    const playPromise = usePetStore.getState().applyPetAction('play');
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(petCommandsMock.savePet).toHaveBeenCalledTimes(1);
+    expect(usePetStore.getState().pet.satiety).toBe(72);
+
+    releaseFirstSave();
+
+    await Promise.all([feedPromise, playPromise]);
+
+    const state = usePetStore.getState();
+
+    expect(petCommandsMock.savePet).toHaveBeenCalledTimes(2);
+    expect(state.pet.satiety).toBe(68);
+    expect(state.pet.fun).toBe(64);
+  });
+
+  it('keeps the current pet dirty when a save fails and retries on refresh', async () => {
+    vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'));
+
+    const modelModule = await import('../model');
+    const { usePetStore } = await loadPetStoreModule();
+
+    petCommandsMock.savePet
+      .mockRejectedValueOnce(new Error('disk unavailable'))
+      .mockResolvedValueOnce(undefined);
+
+    usePetStore.setState({
+      pet: {
+        ...modelModule.createLivePetState(Date.parse('2026-04-01T00:00:00.000Z')),
+        satiety: 50,
+      },
+      alerts: [],
+      status: 'ready',
+      draftName: 'Byte',
+      errorMessage: null,
+      saveMessage: null,
+      saveState: 'idle',
+      pendingSaveOperationId: null,
+      lastResolvedSaveOperationId: null,
+    });
+
+    await usePetStore.getState().applyPetAction('feed');
+    await Promise.resolve();
+
+    expect(usePetStore.getState()).toMatchObject({
+      saveState: 'dirty',
+      pet: expect.objectContaining({
+        satiety: 72,
+      }),
+    });
+
+    await usePetStore.getState().refresh();
+
+    expect(usePetStore.getState().saveState).toBe('idle');
+    expect(petCommandsMock.savePet).toHaveBeenCalledTimes(2);
   });
 });

@@ -67,6 +67,20 @@ const ADULT_MILESTONE_TARGETS: Record<PetAdultMilestone, number> = {
   'recovery-run': 2,
 };
 
+// Adult outcome tuning is intentionally authored rather than runtime-tunable so
+// progression identity stays stable while the core care loop is being balanced.
+const ADULT_OUTCOME_THRESHOLDS = {
+  messyCareMistakes: 18,
+  messyWaste: 60,
+  messyCleanliness: 40,
+  playfulCareScore: 30,
+  playfulFun: 65,
+  playfulCareMistakes: 10,
+  resilientCareMistakes: 8,
+  resilientCareScore: 18,
+  resilientHealth: 55,
+} as const;
+
 export const ADULT_MILESTONE_DETAILS: Record<
   PetAdultMilestone,
   {
@@ -633,15 +647,28 @@ export function deriveAdultOutcome(state: Pick<
   | 'waste'
   | 'isSick'
 >): PetAdultOutcome {
-  if (state.careMistakes >= 18 || state.waste >= 60 || state.cleanliness <= 40) {
+  if (
+    state.careMistakes >= ADULT_OUTCOME_THRESHOLDS.messyCareMistakes ||
+    state.waste >= ADULT_OUTCOME_THRESHOLDS.messyWaste ||
+    state.cleanliness <= ADULT_OUTCOME_THRESHOLDS.messyCleanliness
+  ) {
     return 'messy';
   }
 
-  if (state.careScore >= 30 && state.fun >= 65 && state.careMistakes <= 10) {
+  if (
+    state.careScore >= ADULT_OUTCOME_THRESHOLDS.playfulCareScore &&
+    state.fun >= ADULT_OUTCOME_THRESHOLDS.playfulFun &&
+    state.careMistakes <= ADULT_OUTCOME_THRESHOLDS.playfulCareMistakes
+  ) {
     return 'playful';
   }
 
-  if (state.careMistakes >= 8 && state.careScore >= 18 && state.health >= 55 && !state.isSick) {
+  if (
+    state.careMistakes >= ADULT_OUTCOME_THRESHOLDS.resilientCareMistakes &&
+    state.careScore >= ADULT_OUTCOME_THRESHOLDS.resilientCareScore &&
+    state.health >= ADULT_OUTCOME_THRESHOLDS.resilientHealth &&
+    !state.isSick
+  ) {
     return 'resilient';
   }
 
@@ -688,7 +715,7 @@ function shouldBecomeSick(
   return (
     state.isSick ||
     state.health <= simulationConfig.lowHealthThreshold ||
-    state.cleanliness <= 10 ||
+    state.cleanliness <= simulationConfig.sicknessCleanlinessThreshold ||
     state.waste >= simulationConfig.sicknessThreshold
   );
 }

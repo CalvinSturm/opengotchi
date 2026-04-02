@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createEggPetState, createLivePetState } from '../model';
+import { DEFAULT_PET_SIMULATION_CONFIG } from '../simulation/petSimulationConfig';
 import {
   getDeviceCareBits,
   getDeviceMenuActions,
@@ -35,14 +36,17 @@ describe('device ui helpers', () => {
     expect(getHeartMeterCount(12)).toBe(1);
     expect(getHeartMeterCount(0)).toBe(0);
 
-    const eggBits = getDeviceCareBits(createEggPetState(0));
+    const eggBits = getDeviceCareBits(
+      createEggPetState(0),
+      DEFAULT_PET_SIMULATION_CONFIG,
+    );
     const liveBits = getDeviceCareBits({
       ...createLivePetState(0),
       satiety: 10,
       energy: 18,
       waste: 84,
       isSick: true,
-    });
+    }, DEFAULT_PET_SIMULATION_CONFIG);
 
     expect(eggBits.every((bit) => bit.active === false)).toBe(true);
     expect(liveBits.filter((bit) => bit.active).map((bit) => bit.label)).toEqual([

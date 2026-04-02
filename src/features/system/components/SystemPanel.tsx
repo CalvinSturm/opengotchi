@@ -1,7 +1,9 @@
 import { useSettingsStore } from '../../settings/store/settingsStore';
+import { usePetStore } from '../../pet/store/petStore';
 
 export function SystemPanel() {
   const errorMessage = useSettingsStore((state) => state.errorMessage);
+  const petSaveState = usePetStore((state) => state.saveState);
   const notificationsEnabled = useSettingsStore(
     (state) => state.settings.notificationsEnabled,
   );
@@ -18,6 +20,11 @@ export function SystemPanel() {
     (state) => state.setNotificationsEnabled,
   );
   const status = useSettingsStore((state) => state.status);
+  const petSaveStatusLabel = petSaveState === 'saving'
+    ? 'saving'
+    : petSaveState === 'dirty'
+      ? 'unsaved'
+      : 'synced';
 
   return (
     <section className="panel">
@@ -29,6 +36,11 @@ export function SystemPanel() {
       </div>
 
       <div className="settings-list">
+        <div className={`save-state-row save-state-row-${petSaveState}`}>
+          <span>Pet Save</span>
+          <strong>{petSaveStatusLabel}</strong>
+        </div>
+
         <label className="toggle-row">
           <span>Always On Top</span>
           <input

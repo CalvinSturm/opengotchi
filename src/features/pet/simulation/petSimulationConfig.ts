@@ -9,6 +9,7 @@ export type PetSimulationConfig = {
   cleanupAlertThreshold: number;
   highWasteThreshold: number;
   sicknessThreshold: number;
+  sicknessCleanlinessThreshold: number;
   lowHealthThreshold: number;
   lowWasteThreshold: number;
   childStageMs: number;
@@ -50,6 +51,7 @@ export const DEFAULT_PET_SIMULATION_CONFIG: PetSimulationConfig = {
   cleanupAlertThreshold: 70,
   highWasteThreshold: 80,
   sicknessThreshold: 90,
+  sicknessCleanlinessThreshold: 10,
   lowHealthThreshold: 35,
   lowWasteThreshold: 35,
   childStageMs: 60 * 60 * 1_000,
@@ -92,6 +94,7 @@ export const PET_SIMULATION_CONFIG_FIELDS: Array<{
   { key: 'cleanupAlertThreshold', label: 'Cleanup alert', step: 1, min: 0 },
   { key: 'highWasteThreshold', label: 'High waste', step: 1, min: 0 },
   { key: 'sicknessThreshold', label: 'Sickness waste', step: 1, min: 0 },
+  { key: 'sicknessCleanlinessThreshold', label: 'Sickness dirt', step: 1, min: 0 },
   { key: 'lowHealthThreshold', label: 'Low health', step: 1, min: 0 },
   { key: 'awakeSatietyDecay', label: 'Awake satiety', step: 1, min: 0 },
   { key: 'awakeFunDecay', label: 'Awake fun', step: 1, min: 0 },

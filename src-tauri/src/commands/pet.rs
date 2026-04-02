@@ -9,6 +9,6 @@ pub fn load_pet(app: AppHandle) -> Result<PetStateDto, String> {
 }
 
 #[tauri::command]
-pub fn save_pet(app: AppHandle, payload: PetStateDto) -> Result<(), String> {
-    persistence::save_pet(&app, payload).map_err(|error| error.to_string())
+pub fn save_pet(app: AppHandle, operation_id: String, payload: PetStateDto) -> Result<(), String> {
+    persistence::save_pet(&app, &operation_id, payload).map_err(|error| error.to_string())
 }

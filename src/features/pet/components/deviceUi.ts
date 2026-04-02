@@ -1,4 +1,5 @@
 import type { PetLifeState, PetState } from '../model';
+import type { PetSimulationConfig } from '../simulation/petSimulationConfig';
 
 export type DeviceMenuActionId =
   | 'status'
@@ -94,6 +95,7 @@ export function getDeviceMenuActions(
 }
 
 export function getHeartMeterCount(value: number): number {
+  // The four-heart readout mirrors the classic device display and is intentionally fixed.
   if (value >= 85) {
     return 4;
   }
@@ -113,7 +115,13 @@ export function getHeartMeterCount(value: number): number {
   return 0;
 }
 
-export function getDeviceCareBits(state: PetState): Array<{
+export function getDeviceCareBits(
+  state: PetState,
+  simulationConfig: Pick<
+    PetSimulationConfig,
+    'cleanupAlertThreshold' | 'dirtyThreshold' | 'lowNeedThreshold'
+  >,
+): Array<{
   label: string;
   active: boolean;
 }> {
@@ -124,7 +132,9 @@ export function getDeviceCareBits(state: PetState): Array<{
     },
     {
       label: 'WC',
-      active: state.waste >= 70 || state.cleanliness <= 20,
+      active:
+        state.waste >= simulationConfig.cleanupAlertThreshold ||
+        state.cleanliness <= simulationConfig.dirtyThreshold,
     },
     {
       label: 'ZZ',
@@ -134,7 +144,11 @@ export function getDeviceCareBits(state: PetState): Array<{
       label: 'CALL',
       active:
         state.lifeState === 'alive' &&
-        (state.satiety <= 20 || state.fun <= 20 || state.energy <= 20),
+        (
+          state.satiety <= simulationConfig.lowNeedThreshold ||
+          state.fun <= simulationConfig.lowNeedThreshold ||
+          state.energy <= simulationConfig.lowNeedThreshold
+        ),
     },
   ];
 }

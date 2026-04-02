@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 
-import { createDefaultPetState, type PetState } from '../model';
+import {
+  createDefaultPetState,
+  toIsoTimestamp,
+  type PetState,
+} from '../model';
 import {
   applyAction,
   catchup,
@@ -16,9 +20,13 @@ import {
 } from '../../../lib/tauri/petCommands';
 
 type PetStoreStatus = 'idle' | 'loading' | 'ready' | 'error';
+type PetSaveState = 'idle' | 'saving' | 'dirty';
 
 type PetStoreState = {
   status: PetStoreStatus;
+  saveState: PetSaveState;
+  pendingSaveOperationId: string | null;
+  lastResolvedSaveOperationId: string | null;
   pet: PetState;
   alerts: PetAlert[];
   draftName: string;
@@ -29,10 +37,14 @@ type PetStoreState = {
   setDraftName: (name: string) => void;
   hatchPet: () => Promise<void>;
   applyPetAction: (action: PetAction) => Promise<void>;
-  markSaveCompleted: (savedAt: string) => void;
-  markSaveFailed: (message: string) => void;
+  markSaveCompleted: (operationId: string, savedAt: string) => void;
+  markSaveFailed: (operationId: string, message: string) => void;
   clearSaveMessage: () => void;
 };
+
+const INITIAL_PET = createDefaultPetState();
+let petOperationQueue: Promise<unknown> = Promise.resolve();
+let nextSaveOperationCount = 0;
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -51,145 +63,229 @@ function createPetSnapshot(pet: PetState): Pick<PetStoreState, 'pet' | 'alerts'>
   };
 }
 
-export const usePetStore = create<PetStoreState>((set, get) => ({
-  status: 'idle',
-  ...createPetSnapshot(createDefaultPetState()),
-  draftName: createDefaultPetState().name,
-  errorMessage: null,
-  saveMessage: null,
-  async loadPet() {
-    set({ status: 'loading', errorMessage: null });
+function createSaveOperationId(): string {
+  nextSaveOperationCount += 1;
+  return `pet-save-${nextSaveOperationCount}`;
+}
 
-    try {
-      const simulationConfig = getPetSimulationConfig();
-      const { pet, consumedTicks } = tickPet(
-        await loadPetCommand(),
-        Date.now(),
-        simulationConfig,
-      );
+function enqueuePetOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const nextOperation = petOperationQueue.then(operation);
+  petOperationQueue = nextOperation.then(
+    () => undefined,
+    () => undefined,
+  );
+  return nextOperation;
+}
 
-      set({
-        ...createPetSnapshot(pet),
-        draftName: pet.name,
-        status: 'ready',
-        saveMessage: null,
-      });
+function buildUnsavedChangesMessage(message: string): string {
+  return `${message} Changes are still in memory and marked unsaved.`;
+}
 
-      if (consumedTicks > 0) {
-        await savePetCommand(pet);
-      }
-    } catch (error) {
-      set({
-        status: 'error',
-        errorMessage: toErrorMessage(error),
-      });
-    }
-  },
-  async refresh() {
-    const nowMs = Date.now();
-    const simulationConfig = getPetSimulationConfig();
-    const { pet, consumedTicks } = tickPet(get().pet, nowMs, simulationConfig);
+function resolveSaveCompletedState(
+  state: PetStoreState,
+  operationId: string,
+  savedAt: string,
+): Partial<PetStoreState> | null {
+  if (state.lastResolvedSaveOperationId === operationId) {
+    return null;
+  }
 
-    set({
-      ...createPetSnapshot(pet),
-      draftName: pet.name,
-    });
+  if (state.pendingSaveOperationId !== operationId) {
+    return null;
+  }
 
-    if (consumedTicks === 0) {
-      return;
-    }
+  return {
+    status: state.status === 'loading' ? 'ready' : state.status,
+    saveState: 'idle',
+    pendingSaveOperationId: null,
+    lastResolvedSaveOperationId: operationId,
+    saveMessage: `Saved at ${new Date(savedAt).toLocaleTimeString()}`,
+    errorMessage: null,
+  };
+}
 
-    try {
-      await savePetCommand(pet);
-    } catch (error) {
-      set({
-        status: 'error',
-        errorMessage: toErrorMessage(error),
-      });
-    }
-  },
-  setDraftName(name) {
-    set({
-      draftName: name,
-      errorMessage: null,
-    });
-  },
-  async hatchPet() {
-    const nowMs = Date.now();
-    const currentPet = get().pet;
-    const nextName = get().draftName.trim();
+function resolveSaveFailedState(
+  state: PetStoreState,
+  operationId: string,
+  message: string,
+): Partial<PetStoreState> | null {
+  if (state.lastResolvedSaveOperationId === operationId) {
+    return null;
+  }
 
-    if (!nextName) {
-      set({
-        status: 'error',
-        errorMessage: 'Choose a pet name before hatching.',
-      });
-      return;
-    }
+  if (state.pendingSaveOperationId !== operationId) {
+    return null;
+  }
 
-    const nextPet = applyAction(
-      {
-        ...currentPet,
-        name: nextName,
-      },
-      'hatch',
-      nowMs,
-    );
+  return {
+    status: state.status === 'loading' ? 'ready' : state.status,
+    saveState: 'dirty',
+    pendingSaveOperationId: null,
+    lastResolvedSaveOperationId: operationId,
+    saveMessage: null,
+    errorMessage: buildUnsavedChangesMessage(message),
+  };
+}
+
+export const usePetStore = create<PetStoreState>((set, get) => {
+  const persistPetSnapshot = async (pet: PetState): Promise<void> => {
+    const operationId = createSaveOperationId();
 
     set({
-      ...createPetSnapshot(nextPet),
-      draftName: nextName,
-      status: 'ready',
-      errorMessage: null,
+      saveState: 'saving',
+      pendingSaveOperationId: operationId,
       saveMessage: null,
+      errorMessage: null,
     });
 
     try {
-      await savePetCommand(nextPet);
-    } catch (error) {
-      set({
-        status: 'error',
-        errorMessage: toErrorMessage(error),
+      await savePetCommand({
+        operationId,
+        pet,
       });
-    }
-  },
-  async applyPetAction(action) {
-    const nowMs = Date.now();
-    const simulationConfig = getPetSimulationConfig();
-    const currentPet = catchup(get().pet, nowMs, simulationConfig);
-    const nextPet = applyAction(currentPet, action, nowMs, simulationConfig);
-
-    set({
-      ...createPetSnapshot(nextPet),
-      draftName: nextPet.name,
-      status: 'ready',
-      errorMessage: null,
-      saveMessage: null,
-    });
-
-    try {
-      await savePetCommand(nextPet);
+      get().markSaveCompleted(operationId, toIsoTimestamp());
     } catch (error) {
-      set({
-        status: 'error',
-        errorMessage: toErrorMessage(error),
-      });
+      get().markSaveFailed(operationId, toErrorMessage(error));
     }
-  },
-  markSaveCompleted(savedAt) {
-    set({
-      saveMessage: `Saved at ${new Date(savedAt).toLocaleTimeString()}`,
-      errorMessage: null,
-    });
-  },
-  markSaveFailed(message) {
-    set({
-      status: 'error',
-      errorMessage: message,
-      saveMessage: null,
-    });
-  },
-  clearSaveMessage() {
-    set({ saveMessage: null });
-  },
-}));
+  };
+
+  return {
+    status: 'idle',
+    saveState: 'idle',
+    pendingSaveOperationId: null,
+    lastResolvedSaveOperationId: null,
+    ...createPetSnapshot(INITIAL_PET),
+    draftName: INITIAL_PET.name,
+    errorMessage: null,
+    saveMessage: null,
+    loadPet() {
+      return enqueuePetOperation(async () => {
+        set({
+          status: 'loading',
+          errorMessage: null,
+        });
+
+        try {
+          const simulationConfig = getPetSimulationConfig();
+          const { pet, consumedTicks } = tickPet(
+            await loadPetCommand(),
+            Date.now(),
+            simulationConfig,
+          );
+
+          set({
+            ...createPetSnapshot(pet),
+            draftName: pet.name,
+            status: 'ready',
+            saveState: 'idle',
+            pendingSaveOperationId: null,
+            lastResolvedSaveOperationId: null,
+            saveMessage: null,
+            errorMessage: null,
+          });
+
+          if (consumedTicks > 0) {
+            await persistPetSnapshot(pet);
+          }
+        } catch (error) {
+          set({
+            status: 'error',
+            saveState: 'idle',
+            pendingSaveOperationId: null,
+            errorMessage: toErrorMessage(error),
+          });
+        }
+      });
+    },
+    refresh() {
+      return enqueuePetOperation(async () => {
+        const nowMs = Date.now();
+        const simulationConfig = getPetSimulationConfig();
+        const currentState = get();
+        const { pet, consumedTicks } = tickPet(
+          currentState.pet,
+          nowMs,
+          simulationConfig,
+        );
+
+        set({
+          ...createPetSnapshot(pet),
+          draftName: pet.name,
+        });
+
+        if (consumedTicks === 0 && get().saveState !== 'dirty') {
+          return;
+        }
+
+        await persistPetSnapshot(pet);
+      });
+    },
+    setDraftName(name) {
+      set({
+        draftName: name,
+        errorMessage: null,
+      });
+    },
+    hatchPet() {
+      return enqueuePetOperation(async () => {
+        const nowMs = Date.now();
+        const currentPet = get().pet;
+        const nextName = get().draftName.trim();
+
+        if (!nextName) {
+          set({
+            status: 'error',
+            errorMessage: 'Choose a pet name before hatching.',
+          });
+          return;
+        }
+
+        const nextPet = applyAction(
+          {
+            ...currentPet,
+            name: nextName,
+          },
+          'hatch',
+          nowMs,
+        );
+
+        set({
+          ...createPetSnapshot(nextPet),
+          draftName: nextName,
+          status: 'ready',
+          saveMessage: null,
+          errorMessage: null,
+        });
+
+        await persistPetSnapshot(nextPet);
+      });
+    },
+    applyPetAction(action) {
+      return enqueuePetOperation(async () => {
+        const nowMs = Date.now();
+        const simulationConfig = getPetSimulationConfig();
+        const currentPet = catchup(get().pet, nowMs, simulationConfig);
+        const nextPet = applyAction(currentPet, action, nowMs, simulationConfig);
+
+        set({
+          ...createPetSnapshot(nextPet),
+          draftName: nextPet.name,
+          status: 'ready',
+          saveMessage: null,
+          errorMessage: null,
+        });
+
+        await persistPetSnapshot(nextPet);
+      });
+    },
+    markSaveCompleted(operationId, savedAt) {
+      set((state) => resolveSaveCompletedState(state, operationId, savedAt) ?? state);
+    },
+    markSaveFailed(operationId, message) {
+      set((state) => resolveSaveFailedState(state, operationId, message) ?? state);
+    },
+    clearSaveMessage() {
+      set({ saveMessage: null });
+    },
+  };
+});

@@ -84,6 +84,7 @@ select {
 
 .device-photo-frame,
 .device-help,
+.device-save-notice,
 .device-note,
 .device-nameplate {
   position: relative;
@@ -307,6 +308,28 @@ select {
   padding: 0.8rem 1rem;
   text-align: center;
   width: min(100%, 24rem);
+}
+
+.device-save-notice {
+  border-radius: 1rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: -0.35rem 0 0;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  width: min(100%, 24rem);
+}
+
+.device-save-notice-saving {
+  background: rgba(247, 187, 68, 0.14);
+  border: 1px solid rgba(247, 187, 68, 0.24);
+  color: var(--accent);
+}
+
+.device-save-notice-dirty {
+  background: rgba(255, 142, 122, 0.12);
+  border: 1px solid rgba(255, 142, 122, 0.26);
+  color: var(--danger);
 }
 
 .device-nameplate {
@@ -865,6 +888,44 @@ select {
 
 .inline-error {
   border: 1px solid rgba(255, 142, 122, 0.28);
+  color: var(--danger);
+}
+
+.save-state-row {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.save-state-row strong {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.save-state-row-idle strong {
+  color: #9fd7b2;
+}
+
+.save-state-row-saving {
+  border-color: rgba(247, 187, 68, 0.22);
+  background: rgba(247, 187, 68, 0.08);
+}
+
+.save-state-row-saving strong {
+  color: var(--accent);
+}
+
+.save-state-row-dirty {
+  border-color: rgba(255, 142, 122, 0.22);
+  background: rgba(255, 142, 122, 0.08);
+}
+
+.save-state-row-dirty strong {
   color: var(--danger);
 }
 

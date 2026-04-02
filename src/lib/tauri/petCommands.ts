@@ -23,7 +23,11 @@ export async function loadPet(): Promise<PetStateDTO> {
   return petStateDtoSchema.parse(result);
 }
 
-export async function savePet(pet: PetStateDTO): Promise<void> {
+export async function savePet(input: {
+  operationId: string;
+  pet: PetStateDTO;
+}): Promise<void> {
+  const { operationId, pet } = input;
   const parsedPet = petStateDtoSchema.parse(pet);
 
   if (!hasTauriRuntime()) {
@@ -31,6 +35,7 @@ export async function savePet(pet: PetStateDTO): Promise<void> {
   }
 
   await invoke<void>('save_pet', {
+    operationId,
     payload: parsedPet,
   });
 }

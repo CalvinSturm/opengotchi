@@ -220,6 +220,7 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
   const draftName = usePetStore((state) => state.draftName);
   const hatchPet = usePetStore((state) => state.hatchPet);
   const pet = usePetStore((state) => state.pet);
+  const saveState = usePetStore((state) => state.saveState);
   const setDraftName = usePetStore((state) => state.setDraftName);
   const simulationConfig = usePetSimulationConfigStore((state) => state.config);
 
@@ -237,8 +238,20 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
   );
   const selectedAction = menuActions[selectedIndex] ?? menuActions[0];
   const statusInsight = deriveStatusInsightWithConfig(pet, simulationConfig);
-  const careBits = getDeviceCareBits(pet);
+  const careBits = getDeviceCareBits(pet, simulationConfig);
   const attentionCount = careBits.filter((bit) => bit.active).length;
+  const saveStateLabel = saveState === 'saving'
+    ? 'SAVE'
+    : saveState === 'dirty'
+      ? 'UNSVD'
+      : attentionCount > 0
+        ? `CALL ${attentionCount}`
+        : 'OK';
+  const saveNotice = saveState === 'saving'
+    ? 'Saving the latest pet state to disk.'
+    : saveState === 'dirty'
+      ? 'Unsaved changes: the app will retry and your latest state is still only in memory.'
+      : null;
 
   useEffect(() => {
     if (!menuActions.some((action) => action.id === selectedActionId)) {
@@ -313,6 +326,44 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
     setRecentActionId(selectedAction.id);
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (isEditableTarget || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      switch (event.key.toLowerCase()) {
+        case 'a':
+          event.preventDefault();
+          handleCycle();
+          break;
+        case 'b':
+          event.preventDefault();
+          void handleConfirm();
+          break;
+        case 'c':
+          event.preventDefault();
+          handleCancel();
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleCancel, handleConfirm, handleCycle]);
+
   return (
     <section className="device-stage">
       <div className="device-caption">
@@ -364,7 +415,7 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
 
             <div className="lcd-overlay-footer">
               <span>{lcdMessage}</span>
-              <span>{attentionCount > 0 ? `CALL ${attentionCount}` : 'OK'}</span>
+              <span>{saveStateLabel}</span>
             </div>
 
             <div className="lcd-menu-strip" aria-label="Current menu icons">
@@ -413,6 +464,16 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
               : statusInsight.detail}
         </p>
 
+        {saveNotice ? (
+          <p
+            className={`device-save-notice ${
+              saveState === 'dirty' ? 'device-save-notice-dirty' : 'device-save-notice-saving'
+            }`}
+          >
+            {saveNotice}
+          </p>
+        ) : null}
+
         {pet.lifeState === 'egg' ? (
           <label className="device-nameplate">
             <span>NAME</span>
@@ -439,7 +500,8 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
 function DeviceStatusView({ pet }: { pet: PetState }) {
   const hungryHearts = getHeartMeterCount(pet.satiety);
   const happyHearts = getHeartMeterCount(pet.fun);
-  const careBits = getDeviceCareBits(pet);
+  const simulationConfig = usePetSimulationConfigStore((state) => state.config);
+  const careBits = getDeviceCareBits(pet, simulationConfig);
 
   return (
     <div className="lcd-status-view">

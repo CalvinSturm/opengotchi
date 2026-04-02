@@ -47,19 +47,29 @@ describe('desktop event subscription', () => {
     callbacks.get('tray://feed-shortcut')?.({ payload: null });
     callbacks.get('tray://play-shortcut')?.({ payload: null });
     callbacks.get('pet://save-completed')?.({
-      payload: { savedAt: '2026-04-01T17:00:00.000Z' },
+      payload: {
+        operationId: 'pet-save-1',
+        savedAt: '2026-04-01T17:00:00.000Z',
+      },
     });
     callbacks.get('pet://save-failed')?.({
-      payload: { message: 'save failed' },
+      payload: {
+        operationId: 'pet-save-2',
+        message: 'save failed',
+      },
     });
 
     expect(handlers.onOpenMainWindow).toHaveBeenCalledTimes(1);
     expect(handlers.onFeedShortcut).toHaveBeenCalledTimes(1);
     expect(handlers.onPlayShortcut).toHaveBeenCalledTimes(1);
     expect(handlers.onSaveCompleted).toHaveBeenCalledWith(
+      'pet-save-1',
       '2026-04-01T17:00:00.000Z',
     );
-    expect(handlers.onSaveFailed).toHaveBeenCalledWith('save failed');
+    expect(handlers.onSaveFailed).toHaveBeenCalledWith(
+      'pet-save-2',
+      'save failed',
+    );
 
     dispose();
 

@@ -20,12 +20,14 @@ const SAVE_FAILED_EVENT: &str = "pet://save-failed";
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SaveCompletedEvent {
+    operation_id: String,
     saved_at: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SaveFailedEvent {
+    operation_id: String,
     message: String,
 }
 
@@ -51,7 +53,11 @@ pub fn load_pet<R: Runtime>(app: &AppHandle<R>) -> AppResult<PetStateDto> {
     )
 }
 
-pub fn save_pet<R: Runtime>(app: &AppHandle<R>, payload: PetStateDto) -> AppResult<()> {
+pub fn save_pet<R: Runtime>(
+    app: &AppHandle<R>,
+    operation_id: &str,
+    payload: PetStateDto,
+) -> AppResult<()> {
     let result = save_pet_inner(app, payload);
 
     match &result {
@@ -59,6 +65,7 @@ pub fn save_pet<R: Runtime>(app: &AppHandle<R>, payload: PetStateDto) -> AppResu
             let _ = app.emit(
                 SAVE_COMPLETED_EVENT,
                 SaveCompletedEvent {
+                    operation_id: operation_id.to_string(),
                     saved_at: current_timestamp().unwrap_or_else(|_| String::from("")),
                 },
             );
@@ -67,6 +74,7 @@ pub fn save_pet<R: Runtime>(app: &AppHandle<R>, payload: PetStateDto) -> AppResu
             let _ = app.emit(
                 SAVE_FAILED_EVENT,
                 SaveFailedEvent {
+                    operation_id: operation_id.to_string(),
                     message: error.to_string(),
                 },
             );
