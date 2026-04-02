@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import shellPhoto from '../../../assets/tamagotchi-shell-photo.jpg';
+import shellPhoto from '../../../../assets/ui_background.png';
 import type { PetState } from '../model';
 import { deriveStatusInsightWithConfig } from '../simulation/petSimulation';
 import { usePetSimulationConfigStore } from '../simulation/petSimulationConfig';
