@@ -24,7 +24,9 @@ This repository is a narrow bootstrap for a desktop Tamagotchi-like app.
 
 - `docs/architecture.md`: architecture boundaries and invariants.
 - `src/app`: app shell and styling.
-- `src/features/pet`: pet model, simulation, state store, and UI.
+- `src/features/pet`: pet model, simulation, state store, and device UI.
+- `src/features/settings`: settings state store.
+- `src/features/system`: desktop event wiring, reminder sync, dev tools.
 - `src/lib/tauri`: Tauri IPC wrappers.
 - `src-tauri/src/commands`: thin command handlers.
 - `src-tauri/src/services`: Rust-side persistence and desktop-only services.

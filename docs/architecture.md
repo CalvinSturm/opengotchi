@@ -74,13 +74,17 @@
 - `src/app`
   - app shell and shared styling
 - `src/features/pet/components`
-  - pet UI only
+  - device UI: LCD screen, pixel sprites, three-button controls
 - `src/features/pet/store`
-  - Zustand state coordination
+  - Zustand state coordination for pet mutations and save tracking
 - `src/features/pet/simulation`
-  - pure gameplay rules
+  - pure gameplay rules (decay, actions, alerts, outcomes, milestones)
 - `src/features/pet/model.ts`
   - frontend pet DTO/model definitions
+- `src/features/settings`
+  - settings state store (always-on-top, notifications)
+- `src/features/system`
+  - desktop event wiring, reminder sync, dev tools, system panel
 - `src/lib/tauri`
   - frontend IPC wrappers around `invoke()`
 - `assets`

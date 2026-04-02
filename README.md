@@ -13,21 +13,17 @@ Desktop Tamagotchi-style pet game built with:
 
 Implemented now:
 
-- Gen 2-inspired device UI with shell art background, LCD overlay, and three-button `A / B / C` controls
+- Device-only UI: amber Tamagotchi shell centered on a dark background with LCD overlay and three-button `A / B / C` controls
 - Egg -> alive -> dead lifecycle
 - Hatch flow with pre-run naming
 - Feed, play, clean, heal, sleep, and restart actions
 - Adult outcomes and one adult milestone per outcome
 - Minute-based decay with offline catch-up and aligned wake scheduling
 - Desktop-owned reminder cooldown and repeat scheduling
-- Explicit save status UX:
-  - `saving`
-  - `unsaved`
-  - `synced`
+- LCD save status indicator (`SAVE` / `UNSVD` / `OK`)
 - Serialized pet-store mutations to avoid refresh/action races
 - Save-status event matching via per-save operation IDs
 - Frontend listeners for tray and save-status events
-- Settings/system UI
 - Dev-only runtime tuning panel behind backtick and build gating
 - Rust pet/settings persistence with atomic writes
 - Legacy read compatibility for the previous `pet-save.json` envelope format
@@ -48,6 +44,8 @@ Implemented now:
 - Frontend UI lives in `src/app` and `src/features/pet/components`
 - Frontend state coordination lives in `src/features/pet/store`
 - Gameplay simulation lives in `src/features/pet/simulation`
+- Settings state lives in `src/features/settings`
+- System integration (desktop events, reminder sync) lives in `src/features/system`
 - Root `assets/` holds shell/background art consumed by the frontend
 - Frontend Tauri wrappers live in `src/lib/tauri`
 - Thin Rust commands live in `src-tauri/src/commands`
@@ -122,8 +120,8 @@ Current implementation priorities:
 
 1. Expand post-adult content beyond a single milestone per adult outcome.
 2. Decide whether reminder cooldown state should persist across full app restarts.
-3. Add higher-level rendering tests around the actual device shell and overlay alignment.
-4. Replace text LCD menu labels with icon-faithful pixel menu art.
+3. Replace text LCD menu labels with icon-faithful pixel menu art.
+4. Add higher-level rendering tests around the device shell and overlay alignment.
 
 ## Project Layout
 
@@ -134,10 +132,14 @@ Current implementation priorities:
 |-- src/
 |   |-- app/
 |   |-- features/
-|   |   `-- pet/
-|   |       |-- components/
-|   |       |-- simulation/
-|   |       `-- store/
+|   |   |-- pet/
+|   |   |   |-- components/
+|   |   |   |-- simulation/
+|   |   |   `-- store/
+|   |   |-- settings/
+|   |   |   `-- store/
+|   |   `-- system/
+|   |       `-- components/
 |   `-- lib/
 |       `-- tauri/
 `-- src-tauri/
