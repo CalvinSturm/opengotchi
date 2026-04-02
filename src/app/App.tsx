@@ -4,7 +4,6 @@ import { getNextSimulationWakeDelayMs } from '../features/pet/simulation/petSimu
 import { usePetSimulationConfigStore } from '../features/pet/simulation/petSimulationConfig';
 import { useSettingsStore } from '../features/settings/store/settingsStore';
 import { DevToolsPanel } from '../features/system/components/DevToolsPanel';
-import { SystemPanel } from '../features/system/components/SystemPanel';
 import { buildPetReminderSyncPayload } from '../features/system/reminderSync';
 import { subscribeToDesktopEvents } from '../features/system/tauriEvents';
 import { TamagotchiDevice } from '../features/pet/components/TamagotchiDevice';
@@ -18,7 +17,6 @@ export function App() {
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const alerts = usePetStore((state) => state.alerts);
   const errorMessage = usePetStore((state) => state.errorMessage);
-  const clearSaveMessage = usePetStore((state) => state.clearSaveMessage);
   const loadPet = usePetStore((state) => state.loadPet);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const notificationsEnabled = useSettingsStore(
@@ -28,7 +26,6 @@ export function App() {
   const markSaveFailed = usePetStore((state) => state.markSaveFailed);
   const pet = usePetStore((state) => state.pet);
   const refresh = usePetStore((state) => state.refresh);
-  const saveMessage = usePetStore((state) => state.saveMessage);
   const status = usePetStore((state) => state.status);
   const applyPetAction = usePetStore((state) => state.applyPetAction);
   const simulationConfig = usePetSimulationConfigStore((state) => state.config);
@@ -126,20 +123,6 @@ export function App() {
   }, [pet, refresh, simulationConfig]);
 
   useEffect(() => {
-    if (!saveMessage) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      clearSaveMessage();
-    }, 2_500);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [clearSaveMessage, saveMessage]);
-
-  useEffect(() => {
     void syncPetReminder(
       buildPetReminderSyncPayload({
         notificationsEnabled,
@@ -153,9 +136,6 @@ export function App() {
     <main className="shell">
       <TamagotchiDevice disabled={status === 'loading'} />
       {DEV_TOOLS_ENABLED ? <DevToolsPanel open={devToolsOpen} /> : null}
-      <SystemPanel />
-
-      {saveMessage ? <p className="save-banner">{saveMessage}</p> : null}
 
       {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
     </main>

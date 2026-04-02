@@ -21,17 +21,6 @@ type DeviceView = 'pet' | 'status';
 type PixelTone = 'primary' | 'accent';
 type PixelSprite = Record<string, PixelTone>;
 
-const STATUS_COPY: Record<DeviceMenuActionId, string> = {
-  status: 'Status check.',
-  hatch: 'Crack the egg and start raising the pet.',
-  feed: 'Meal time.',
-  play: 'Play time.',
-  heal: 'Medicine.',
-  clean: 'Toilet and cleanup.',
-  sleep: 'Lights off.',
-  restart: 'Start a new egg.',
-};
-
 const SPRITES: Record<string, PixelSprite> = {
   egg: spriteFromRows([
     '................',
@@ -247,11 +236,6 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
       : attentionCount > 0
         ? `CALL ${attentionCount}`
         : 'OK';
-  const saveNotice = saveState === 'saving'
-    ? 'Saving the latest pet state to disk.'
-    : saveState === 'dirty'
-      ? 'Unsaved changes: the app will retry and your latest state is still only in memory.'
-      : null;
 
   useEffect(() => {
     if (!menuActions.some((action) => action.id === selectedActionId)) {
@@ -366,16 +350,6 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
 
   return (
     <section className="device-stage">
-      <div className="device-caption">
-        <p className="eyebrow">Original Gen 2 Direction</p>
-        <h1>OpenGotchi</h1>
-        <p className="hero-copy">
-          Three-button device flow: `A` cycles icons, `B` confirms, `C` backs
-          out. The current sim maps into `STAT`, `MEAL`, `GAME`, `MED`, `WC`,
-          `LITE`, and `RST`.
-        </p>
-      </div>
-
       <div className="device-shell" role="group" aria-label="Tamagotchi device">
         <div className="device-photo-frame">
           <img
@@ -455,44 +429,24 @@ export function TamagotchiDevice({ disabled }: TamagotchiDeviceProps) {
             />
           </div>
         </div>
-
-        <p className="device-help">
-          {deviceView === 'status'
-            ? 'Press C to return to the pet screen.'
-            : selectedAction
-              ? STATUS_COPY[selectedAction.id]
-              : statusInsight.detail}
-        </p>
-
-        {saveNotice ? (
-          <p
-            className={`device-save-notice ${
-              saveState === 'dirty' ? 'device-save-notice-dirty' : 'device-save-notice-saving'
-            }`}
-          >
-            {saveNotice}
-          </p>
-        ) : null}
-
-        {pet.lifeState === 'egg' ? (
-          <label className="device-nameplate">
-            <span>NAME</span>
-            <input
-              className="device-name-input"
-              disabled={disabled}
-              maxLength={32}
-              onChange={(event) => {
-                setDraftName(event.target.value);
-              }}
-              placeholder="Byte"
-              type="text"
-              value={draftName}
-            />
-          </label>
-        ) : (
-          <p className="device-note">{statusInsight.detail}</p>
-        )}
       </div>
+
+      {pet.lifeState === 'egg' ? (
+        <label className="device-nameplate">
+          <span>NAME</span>
+          <input
+            className="device-name-input"
+            disabled={disabled}
+            maxLength={32}
+            onChange={(event) => {
+              setDraftName(event.target.value);
+            }}
+            placeholder="Byte"
+            type="text"
+            value={draftName}
+          />
+        </label>
+      ) : null}
     </section>
   );
 }
